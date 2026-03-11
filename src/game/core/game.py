@@ -54,6 +54,8 @@ class GameApp:
             screen_height=self.screen.get_height(),
             world_width=SETTINGS.world_width,
             world_height=SETTINGS.world_height,
+            dead_zone_width_ratio=SETTINGS.camera_dead_zone_width_ratio,
+            dead_zone_height_ratio=SETTINGS.camera_dead_zone_height_ratio,
         )
         self.renderer = Renderer(
             screen=self.screen,
@@ -287,8 +289,19 @@ class GameApp:
 
     def _start_new_run(self) -> None:
         run_modifiers = build_run_modifiers(self.profile.upgrades)
-        run_world_width = max(float(self.screen.get_width()), SETTINGS.world_width)
-        run_world_height = max(float(self.screen.get_height()), SETTINGS.world_height)
+        fixed_map = self.renderer.ground_layer.fixed_map
+        map_world_width = float(fixed_map.cols * fixed_map.tile_size)
+        map_world_height = float(fixed_map.rows * fixed_map.tile_size)
+        run_world_width = max(
+            map_world_width,
+            float(self.screen.get_width()),
+            SETTINGS.world_width,
+        )
+        run_world_height = max(
+            map_world_height,
+            float(self.screen.get_height()),
+            SETTINGS.world_height,
+        )
         self.world = World(
             settings=SETTINGS,
             world_width=run_world_width,

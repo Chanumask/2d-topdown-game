@@ -46,6 +46,8 @@ class GameSettings:
     hud_color: tuple[int, int, int] = (236, 236, 236)
 
     grid_step: int = 48
+    camera_dead_zone_width_ratio: float = 0.5
+    camera_dead_zone_height_ratio: float = 0.5
 
 
 SETTINGS = GameSettings()
