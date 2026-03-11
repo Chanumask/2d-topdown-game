@@ -1,0 +1,37 @@
+{
+  "profile": {
+    "last_run_coins": 1,
+    "last_run_enemies_killed": 1,
+    "last_run_result": {
+      "coins_by_player": {
+        "player-1": 1
+      },
+      "enemies_killed_by_player": {
+        "player-1": 1
+      },
+      "enemies_killed_total": 1,
+      "players": [
+        "player-1"
+      ],
+      "simulation_time": 67.09999999999748,
+      "survival_time_seconds": 67.09999999999748,
+      "tick": 4026,
+      "total_run_coins": 1
+    },
+    "last_run_survival_time_seconds": 67.09999999999748,
+    "lifetime_enemies_killed": 16,
+    "lifetime_meta_earned": 14,
+    "lifetime_runs_completed": 2,
+    "meta_currency": 14,
+    "profile_id": "local-profile",
+    "settings": {
+      "fullscreen": true,
+      "master_volume": 100,
+      "mouse_sensitivity": 1.0,
+      "music_volume": 80,
+      "sfx_volume": 90
+    },
+    "upgrades": {}
+  },
+  "schema_version": 1
+}

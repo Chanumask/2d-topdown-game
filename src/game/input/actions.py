@@ -1,0 +1,54 @@
+from dataclasses import dataclass
+
+PlayerId = str
+
+
+@dataclass(slots=True)
+class PlayerActions:
+    move_up: bool = False
+    move_down: bool = False
+    move_left: bool = False
+    move_right: bool = False
+    aim_position: tuple[float, float] | None = None
+    shoot: bool = False
+
+    @property
+    def move_x(self) -> float:
+        return float(self.move_right) - float(self.move_left)
+
+    @property
+    def move_y(self) -> float:
+        return float(self.move_down) - float(self.move_up)
+
+    def to_dict(self) -> dict[str, bool | float | dict[str, float] | None]:
+        aim = None
+        if self.aim_position is not None:
+            aim = {"x": float(self.aim_position[0]), "y": float(self.aim_position[1])}
+
+        return {
+            "move_up": self.move_up,
+            "move_down": self.move_down,
+            "move_left": self.move_left,
+            "move_right": self.move_right,
+            "aim": aim,
+            "shoot": self.shoot,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "PlayerActions":
+        aim_payload = payload.get("aim")
+        aim_position: tuple[float, float] | None = None
+
+        if isinstance(aim_payload, dict):
+            aim_x = float(aim_payload.get("x", 0.0))
+            aim_y = float(aim_payload.get("y", 0.0))
+            aim_position = (aim_x, aim_y)
+
+        return cls(
+            move_up=bool(payload.get("move_up", False)),
+            move_down=bool(payload.get("move_down", False)),
+            move_left=bool(payload.get("move_left", False)),
+            move_right=bool(payload.get("move_right", False)),
+            aim_position=aim_position,
+            shoot=bool(payload.get("shoot", False)),
+        )
