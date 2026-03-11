@@ -14,11 +14,14 @@ from game.render.characters import (
     AnimationClip,
     CharacterSpriteLibrary,
 )
+from game.render.enemies import EnemySpriteLibrary
 from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image
 from game.settings import GameSettings
+from game.ui.hud import BottomPlayerHUD
 
 ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock1.png"
+COIN_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
 
 
 @dataclass(slots=True)
@@ -29,6 +32,13 @@ class PlayerAnimationState:
     throw_time_remaining_seconds: float = 0.0
     last_attack_tick_seen: int = -1
     facing_left: bool = False
+
+
+@dataclass(slots=True)
+class EnemyAnimationState:
+    current_animation: str = ANIM_IDLE
+    frame_index: int = 0
+    frame_progress_seconds: float = 0.0
 
 
 class Renderer:
@@ -44,11 +54,18 @@ class Renderer:
         self.camera = camera
         self.settings = settings
         self.local_player_id = local_player_id
-        self.hud_font = fonts.hud
         self.character_library = CharacterSpriteLibrary()
+        self.enemy_library = EnemySpriteLibrary()
         self.player_animation_states: dict[str, PlayerAnimationState] = {}
+        self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
+        self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
+        self.bottom_hud = BottomPlayerHUD(
+            fonts=fonts,
+            local_player_id=local_player_id,
+            character_library=self.character_library,
+        )
 
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
@@ -78,9 +95,9 @@ class Renderer:
         self._draw_grid()
         self._draw_coins(snapshot)
         self._draw_projectiles(snapshot)
-        self._draw_enemies(snapshot)
+        self._draw_enemies(snapshot, render_dt)
         self._draw_players(snapshot, render_dt)
-        self._draw_hud(snapshot)
+        self.bottom_hud.render(self.screen, snapshot)
 
     def _draw_grid(self) -> None:
         screen_width, screen_height = self.screen.get_size()
@@ -183,7 +200,7 @@ class Renderer:
 
     @staticmethod
     def _advance_animation(
-        state: PlayerAnimationState,
+        state: PlayerAnimationState | EnemyAnimationState,
         animation_clip: AnimationClip,
         target_animation: str,
         render_dt: float,
@@ -273,13 +290,34 @@ class Renderer:
             if player_id in active_player_ids
         }
 
-    def _draw_enemies(self, snapshot: WorldSnapshot) -> None:
+    def _draw_enemies(self, snapshot: WorldSnapshot, render_dt: float) -> None:
+        active_enemy_ids: set[int] = set()
         for enemy in snapshot.enemies:
             if not isinstance(enemy, dict):
                 continue
+
+            enemy_id = int(enemy.get("entity_id", -1))
+            if enemy_id >= 0:
+                active_enemy_ids.add(enemy_id)
+
             center = self.camera.world_to_screen(self._read_position(enemy))
-            radius = round(float(enemy.get("radius", self.settings.enemy_radius)))
-            pygame.draw.circle(self.screen, self.settings.enemy_color, center, radius)
+            clip = self.enemy_library.get_idle_clip_for_entity(enemy_id)
+            if clip is None or not clip.frames:
+                radius = round(float(enemy.get("radius", self.settings.enemy_radius)))
+                pygame.draw.circle(self.screen, self.settings.enemy_color, center, radius)
+                continue
+
+            state = self.enemy_animation_states.setdefault(enemy_id, EnemyAnimationState())
+            self._advance_animation(state, clip, ANIM_IDLE, render_dt)
+            current_frame = clip.frames[state.frame_index]
+            sprite_rect = current_frame.get_rect(center=center)
+            self.screen.blit(current_frame, sprite_rect)
+
+        self.enemy_animation_states = {
+            enemy_id: state
+            for enemy_id, state in self.enemy_animation_states.items()
+            if enemy_id in active_enemy_ids
+        }
 
     def _draw_projectiles(self, snapshot: WorldSnapshot) -> None:
         for projectile in snapshot.projectiles:
@@ -296,39 +334,10 @@ class Renderer:
             if not isinstance(coin, dict):
                 continue
             center = self.camera.world_to_screen(self._read_position(coin))
+            if self._draw_coin_sprite(coin, center):
+                continue
             radius = round(float(coin.get("radius", self.settings.coin_radius)))
             pygame.draw.circle(self.screen, self.settings.coin_color, center, radius)
-
-    def _draw_hud(self, snapshot: WorldSnapshot) -> None:
-        local_player = next(
-            (
-                player
-                for player in snapshot.players
-                if isinstance(player, dict) and player.get("player_id") == self.local_player_id
-            ),
-            None,
-        )
-        if local_player is None:
-            local_player = next(
-                (player for player in snapshot.players if isinstance(player, dict)),
-                None,
-            )
-
-        player_health = int(local_player.get("health", 0)) if local_player else 0
-        player_coins = int(local_player.get("coins", 0)) if local_player else 0
-
-        difficulty = snapshot.difficulty
-        text = (
-            f"State: {snapshot.run_state}   "
-            f"Tick: {snapshot.tick}   "
-            f"HP: {player_health}   "
-            f"Run Coins: {player_coins}   "
-            f"Enemies: {len(snapshot.enemies)}   "
-            f"Spawn Interval: {float(difficulty.get('spawn_interval_seconds', 0.0)):.2f}s   "
-            f"Difficulty: {float(difficulty.get('factor', 1.0)):.2f}x"
-        )
-        hud = self.hud_font.render(text, True, self.settings.hud_color)
-        self.screen.blit(hud, (12, 12))
 
     def _draw_rock_projectile(
         self,
@@ -350,6 +359,20 @@ class Renderer:
         if speed_sq > 0.0001:
             angle_degrees = -math.degrees(math.atan2(velocity[1], velocity[0]))
             sprite = pygame.transform.rotozoom(sprite, angle_degrees, 1.0)
+
+        sprite_rect = sprite.get_rect(center=center)
+        self.screen.blit(sprite, sprite_rect)
+        return True
+
+    def _draw_coin_sprite(self, coin: dict[str, object], center: tuple[int, int]) -> bool:
+        if self.coin_sprite_base is None:
+            return False
+
+        radius = float(coin.get("radius", self.settings.coin_radius))
+        target_size = max(8, int(round(radius * 2.6)))
+        sprite = self.coin_sprite_base
+        if sprite.get_width() != target_size or sprite.get_height() != target_size:
+            sprite = pygame.transform.scale(sprite, (target_size, target_size))
 
         sprite_rect = sprite.get_rect(center=center)
         self.screen.blit(sprite, sprite_rect)

@@ -5,7 +5,14 @@ from pathlib import Path
 import pygame
 
 
-def load_spritesheet_frames(path: Path, frame_count: int) -> list[pygame.Surface] | None:
+def load_spritesheet_frames(
+    path: Path,
+    frame_count: int,
+    *,
+    scale: float = 1.0,
+    smooth: bool = False,
+    pixel_scale: int | None = None,
+) -> list[pygame.Surface] | None:
     if frame_count <= 0:
         return None
     if not path.exists():
@@ -30,9 +37,39 @@ def load_spritesheet_frames(path: Path, frame_count: int) -> list[pygame.Surface
     for index in range(frame_count):
         frame_rect = pygame.Rect(index * frame_width, 0, frame_width, sheet_height)
         frame = sheet.subsurface(frame_rect).copy()
+        if pixel_scale is not None:
+            frame = pixelart_upscale_surface(frame, pixel_scale)
+        elif scale != 1.0:
+            frame = scale_surface(frame, scale=scale, smooth=smooth)
         frames.append(frame)
 
     return frames
+
+
+def scale_surface(
+    surface: pygame.Surface,
+    *,
+    scale: float,
+    smooth: bool,
+) -> pygame.Surface:
+    width, height = surface.get_size()
+    scaled_size = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
+    if smooth:
+        return pygame.transform.smoothscale(surface, scaled_size)
+    return pygame.transform.scale(surface, scaled_size)
+
+
+def pixelart_upscale_surface(surface: pygame.Surface, scale_multiple: int) -> pygame.Surface:
+    if scale_multiple < 1:
+        raise ValueError("scale_multiple must be >= 1")
+    if scale_multiple == 1:
+        return surface
+
+    width, height = surface.get_size()
+    return pygame.transform.scale(
+        surface,
+        (width * scale_multiple, height * scale_multiple),
+    )
 
 
 def load_image(path: Path) -> pygame.Surface | None:
@@ -48,3 +85,10 @@ def load_image(path: Path) -> pygame.Surface | None:
     except Exception as error:
         print(f"[Assets] Failed to load image {path}: {error}")
         return None
+
+
+def load_pixelart_image(path: Path, scale_multiple: int = 1) -> pygame.Surface | None:
+    image = load_image(path)
+    if image is None:
+        return None
+    return pixelart_upscale_surface(image, scale_multiple)

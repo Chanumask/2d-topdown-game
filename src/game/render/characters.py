@@ -80,13 +80,17 @@ class CharacterSpriteLibrary:
         portrait = load_image(definition.portrait_path)
 
         for animation_name, animation_def in definition.animations.items():
-            frames = load_spritesheet_frames(animation_def.sheet_path, animation_def.frame_count)
+            frames = load_spritesheet_frames(
+                animation_def.sheet_path,
+                animation_def.frame_count,
+                scale=definition.sprite_scale,
+                smooth=True,
+            )
             if not frames:
                 continue
 
-            scaled_frames = [_scale_frame(frame, definition.sprite_scale) for frame in frames]
             animations[animation_name] = AnimationClip(
-                frames=scaled_frames,
+                frames=frames,
                 fps=animation_def.fps,
                 loop=animation_def.loop,
             )
@@ -202,15 +206,6 @@ def get_character_definitions() -> dict[str, CharacterDefinition]:
             },
         ),
     }
-
-
-def _scale_frame(frame: pygame.Surface, scale: float) -> pygame.Surface:
-    if scale == 1.0:
-        return frame
-
-    width, height = frame.get_size()
-    scaled_size = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
-    return pygame.transform.smoothscale(frame, scaled_size)
 
 
 def _resolve_default_character_id(definitions: dict[str, CharacterDefinition]) -> str:
