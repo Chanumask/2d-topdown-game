@@ -17,6 +17,7 @@ from game.render.characters import (
 from game.render.enemies import EnemySpriteLibrary
 from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image
+from game.render.tiles import AshlandGroundLayer
 from game.settings import GameSettings
 from game.ui.hud import BottomPlayerHUD
 
@@ -56,6 +57,7 @@ class Renderer:
         self.local_player_id = local_player_id
         self.character_library = CharacterSpriteLibrary()
         self.enemy_library = EnemySpriteLibrary()
+        self.ground_layer = AshlandGroundLayer()
         self.player_animation_states: dict[str, PlayerAnimationState] = {}
         self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
         self._last_render_time_seconds: float | None = None
@@ -92,12 +94,23 @@ class Renderer:
 
         # TODO: Add resolution-aware world scaling during the planned camera/map rendering rework.
         self.screen.fill(self.settings.background_color)
-        self._draw_grid()
+        if not self._draw_ground_layer(snapshot):
+            self._draw_grid()
         self._draw_coins(snapshot)
-        self._draw_projectiles(snapshot)
         self._draw_enemies(snapshot, render_dt)
+        self._draw_projectiles(snapshot)
         self._draw_players(snapshot, render_dt)
         self.bottom_hud.render(self.screen, snapshot)
+
+    def _draw_ground_layer(self, snapshot: WorldSnapshot) -> bool:
+        world_width = float(snapshot.world.get("width", self.settings.world_width))
+        world_height = float(snapshot.world.get("height", self.settings.world_height))
+        return self.ground_layer.draw(
+            self.screen,
+            self.camera,
+            world_width=world_width,
+            world_height=world_height,
+        )
 
     def _draw_grid(self) -> None:
         screen_width, screen_height = self.screen.get_size()

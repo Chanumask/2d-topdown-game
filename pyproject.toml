@@ -24,6 +24,7 @@ dev = [
 line-length = 100
 target-version = "py311"
 src = ["src"]
+extend-exclude = ["assets/tilesets/ashland/ashland_a5_manifest.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

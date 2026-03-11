@@ -79,6 +79,20 @@ outside run simulation.
 - Current gameplay uses one default character (`dude_monster`)
 - Character selection UI is not implemented yet
 
+## Ashland Tileset Pipeline
+
+- Active map path: fixed map rendering from `src/game/render/fixed_map.py`
+- Active base-layer tileset: `assets/tilesets/ashland/tf_A5_ashlands_2.png`
+- Active manifest usage:
+  - `assets/tilesets/ashland/ashland_a5_manifest.py`
+  - Used as tile-id -> tileset-coordinate lookup for the fixed base layer
+- Current first map (`ashland_first_fixed_map`) is intentionally simple:
+  - left background region
+  - vertical transition band through the center
+  - right background region
+- A1/B manifests and tilesets are retained for future expansion, but are not part of the active
+  rendering path right now
+
 ## Implemented Gameplay
 
 - App boots into main menu (`Start Run`, `Shop`, `Settings`, `Quit`)
