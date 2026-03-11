@@ -10,7 +10,7 @@ class PlayerActions:
     move_left: bool = False
     move_right: bool = False
     aim_position: tuple[float, float] | None = None
-    shoot: bool = False
+    throw: bool = False
 
     @property
     def move_x(self) -> float:
@@ -31,7 +31,7 @@ class PlayerActions:
             "move_left": self.move_left,
             "move_right": self.move_right,
             "aim": aim,
-            "shoot": self.shoot,
+            "throw": self.throw,
         }
 
     @classmethod
@@ -50,5 +50,5 @@ class PlayerActions:
             move_left=bool(payload.get("move_left", False)),
             move_right=bool(payload.get("move_right", False)),
             aim_position=aim_position,
-            shoot=bool(payload.get("shoot", False)),
+            throw=bool(payload.get("throw", payload.get("shoot", False))),
         )

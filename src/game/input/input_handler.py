@@ -10,7 +10,7 @@ class InputHandler:
         self.local_player_id = local_player_id
 
     def collect(self, events: list[pygame.event.Event]) -> GameplayInputFrame:
-        shoot_pressed = False
+        throw_pressed = False
         request_pause = False
         quit_requested = False
 
@@ -18,7 +18,7 @@ class InputHandler:
             if event.type == pygame.QUIT:
                 quit_requested = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                shoot_pressed = True
+                throw_pressed = True
             elif event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_p):
                 request_pause = True
 
@@ -31,7 +31,7 @@ class InputHandler:
             move_left=bool(keys[pygame.K_a]),
             move_right=bool(keys[pygame.K_d]),
             aim_position=(float(mouse_x), float(mouse_y)),
-            shoot=shoot_pressed,
+            throw=throw_pressed,
         )
         session_actions = SessionActions(request_pause=request_pause)
 

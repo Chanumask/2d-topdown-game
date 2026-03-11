@@ -7,10 +7,12 @@ from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase
 from game.core.upgrades import build_run_modifiers
 from game.core.world import World
+from game.input.actions import PlayerActions
 from game.input.input_handler import InputHandler
 from game.input.menu_input_handler import MenuInputHandler
 from game.input.session_actions import SessionActions
 from game.render.camera import Camera
+from game.render.fonts import UIFonts, load_ui_fonts
 from game.render.renderer import Renderer
 from game.settings import SETTINGS
 from game.ui import (
@@ -33,8 +35,10 @@ class GameApp:
 
         self.screen = self._apply_display_mode()
         self.clock = pygame.time.Clock()
-        self.title_font = pygame.font.Font(None, 52)
-        self.body_font = pygame.font.Font(None, 30)
+        self.ui_fonts: UIFonts = load_ui_fonts()
+        self.title_font = self.ui_fonts.title
+        self.body_font = self.ui_fonts.body
+        self.small_font = self.ui_fonts.small
 
         self.game_input = InputHandler(local_player_id=self.local_player_id)
         self.menu_input = MenuInputHandler()
@@ -56,6 +60,7 @@ class GameApp:
             camera=self.camera,
             settings=SETTINGS,
             local_player_id=self.local_player_id,
+            fonts=self.ui_fonts,
         )
 
         self.world: World | None = None
@@ -145,7 +150,9 @@ class GameApp:
                 self.app_state.running = False
                 return
 
-            self.run_loop.set_player_actions(gameplay_input.actions_by_player)
+            self._sync_camera_to_world_focus()
+            simulation_actions = self._prepare_gameplay_actions(gameplay_input.actions_by_player)
+            self.run_loop.set_player_actions(simulation_actions)
             for player_id, session_actions in gameplay_input.session_actions_by_player.items():
                 self.world.apply_session_actions(player_id, session_actions)
 
@@ -280,13 +287,19 @@ class GameApp:
 
     def _start_new_run(self) -> None:
         run_modifiers = build_run_modifiers(self.profile.upgrades)
+        run_world_width = max(float(self.screen.get_width()), SETTINGS.world_width)
+        run_world_height = max(float(self.screen.get_height()), SETTINGS.world_height)
         self.world = World(
             settings=SETTINGS,
-            world_width=SETTINGS.world_width,
-            world_height=SETTINGS.world_height,
+            world_width=run_world_width,
+            world_height=run_world_height,
             run_modifiers=run_modifiers,
         )
-        self.world.add_player(self.local_player_id)
+        self.world.add_player(
+            self.local_player_id,
+            character_id=SETTINGS.default_player_character_id,
+        )
+        self.camera.set_world_bounds(run_world_width, run_world_height)
 
         self.run_loop = GameLoop(
             world=self.world,
@@ -303,6 +316,7 @@ class GameApp:
         self.current_run_result = None
         self.app_state.current_screen = AppScreen.MAIN_MENU
         self.app_state.current_run_banked = False
+        self.camera.set_world_bounds(SETTINGS.world_width, SETTINGS.world_height)
 
     def _sync_run_screen_from_session(self) -> None:
         if self.world is None:
@@ -337,6 +351,39 @@ class GameApp:
     def _save_profile(self) -> None:
         self.profile_store.save_profile(self.profile)
 
+    def _prepare_gameplay_actions(
+        self,
+        actions_by_player: dict[str, PlayerActions],
+    ) -> dict[str, PlayerActions]:
+        transformed: dict[str, PlayerActions] = {}
+        for player_id, actions in actions_by_player.items():
+            aim_world = None
+            if actions.aim_position is not None:
+                aim_world = self.camera.screen_to_world(actions.aim_position)
+
+            transformed[player_id] = PlayerActions(
+                move_up=actions.move_up,
+                move_down=actions.move_down,
+                move_left=actions.move_left,
+                move_right=actions.move_right,
+                aim_position=aim_world,
+                throw=actions.throw,
+            )
+        return transformed
+
+    def _sync_camera_to_world_focus(self) -> None:
+        if self.world is None:
+            return
+
+        focus_player = self.world.players.get(self.local_player_id)
+        if focus_player is None:
+            focus_player = next(iter(self.world.players.values()), None)
+
+        focus_position = None
+        if focus_player is not None:
+            focus_position = (focus_player.position.x, focus_player.position.y)
+        self.camera.update(focus_position)
+
     def _apply_display_mode(self) -> pygame.Surface:
         if self.profile.settings.fullscreen:
             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -349,5 +396,10 @@ class GameApp:
             self.renderer.set_screen(screen)
         if hasattr(self, "camera"):
             self.camera.set_viewport(screen.get_width(), screen.get_height())
+            if self.world is not None:
+                self.world.ensure_min_bounds(screen.get_width(), screen.get_height())
+                self.camera.set_world_bounds(self.world.world_width, self.world.world_height)
+            else:
+                self.camera.set_world_bounds(SETTINGS.world_width, SETTINGS.world_height)
 
         return screen

@@ -22,8 +22,8 @@ class CombatSystem:
         self.projectile_ttl_seconds = projectile_ttl_seconds
         self.projectile_radius = projectile_radius
 
-    def try_shoot(self, world: World, player: Player) -> bool:
-        if not player.can_shoot() or not player.alive:
+    def try_throw_projectile(self, world: World, player: Player) -> bool:
+        if not player.can_throw() or not player.alive:
             return False
 
         direction = player.aim_position - player.position
@@ -39,7 +39,7 @@ class CombatSystem:
             ttl_seconds=self.projectile_ttl_seconds,
             radius=self.projectile_radius,
         )
-        player.on_shot_fired()
+        player.on_projectile_thrown(world.tick)
         return True
 
     def update_projectiles(self, world: World, dt: float) -> None:

@@ -35,7 +35,7 @@ class PurchaseResult:
 class RunModifiers:
     player_max_health_bonus: int = 0
     player_speed_bonus: float = 0.0
-    shoot_cooldown_reduction: float = 0.0
+    throw_cooldown_reduction: float = 0.0
     projectile_speed_bonus: float = 0.0
     coin_pickup_radius_bonus: float = 0.0
 
@@ -64,17 +64,17 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
     "fast_hands": UpgradeDefinition(
         upgrade_id="fast_hands",
         display_name="Fast Hands",
-        description="Reduce shot cooldown for higher fire rate.",
+        description="Reduce throw cooldown for faster rock throws.",
         base_cost=110,
         cost_scaling=1.55,
         max_level=6,
-        effect_type="shoot_cooldown_reduction",
+        effect_type="throw_cooldown_reduction",
         effect_value_per_level=0.015,
     ),
     "high_velocity_ammo": UpgradeDefinition(
         upgrade_id="high_velocity_ammo",
         display_name="High Velocity Ammo",
-        description="Increase projectile speed.",
+        description="Increase rock projectile speed.",
         base_cost=95,
         cost_scaling=1.50,
         max_level=5,
@@ -185,7 +185,7 @@ def build_run_modifiers(upgrades: dict[str, int]) -> RunModifiers:
     return RunModifiers(
         player_max_health_bonus=int(round(_value("health_boost"))),
         player_speed_bonus=_value("quick_boots"),
-        shoot_cooldown_reduction=_value("fast_hands"),
+        throw_cooldown_reduction=_value("fast_hands"),
         projectile_speed_bonus=_value("high_velocity_ammo"),
         coin_pickup_radius_bonus=_value("magnet"),
     )

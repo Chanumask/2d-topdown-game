@@ -188,7 +188,7 @@ class ShopScreen:
 
         list_top = helper_y + 40
         list_bottom = panel_top - 16
-        row_height = max(34, min(46, height // 16))
+        row_height = max(44, min(52, height // 14))
 
         total_entries = len(self.upgrades) + 1
         max_visible = max(1, (list_bottom - list_top) // row_height)
@@ -263,7 +263,7 @@ class ShopScreen:
             )
             lines.append(f"Next Cost: {'MAXED' if next_cost is None else next_cost}")
 
-        row_height = 24
+        row_height = max(24, body_font.get_linesize() + 4)
         for index, line in enumerate(lines):
             rendered = body_font.render(line, True, (220, 220, 220))
             y = panel_rect.y + 10 + (index * row_height)

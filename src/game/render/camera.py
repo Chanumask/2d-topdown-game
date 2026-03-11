@@ -14,6 +14,10 @@ class Camera:
         self.screen_width = width
         self.screen_height = height
 
+    def set_world_bounds(self, width: float, height: float) -> None:
+        self.world_width = width
+        self.world_height = height
+
     def update(self, focus_position: tuple[float, float] | None) -> None:
         centered_offset_x = min(0.0, (self.world_width - self.screen_width) * 0.5)
         centered_offset_y = min(0.0, (self.world_height - self.screen_height) * 0.5)
@@ -42,3 +46,6 @@ class Camera:
             round(position[0] - self.offset_x),
             round(position[1] - self.offset_y),
         )
+
+    def screen_to_world(self, position: tuple[float, float]) -> tuple[float, float]:
+        return (position[0] + self.offset_x, position[1] + self.offset_y)

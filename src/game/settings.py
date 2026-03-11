@@ -11,12 +11,13 @@ class GameSettings:
     simulation_hz: int = 60
     max_render_fps: int = 120
     max_catchup_steps: int = 5
+    default_player_character_id: str = "dude_monster"
 
     player_radius: float = 14.0
     player_speed: float = 250.0
     player_max_health: int = 100
     player_touch_iframe_seconds: float = 0.4
-    shoot_cooldown_seconds: float = 0.2
+    throw_cooldown_seconds: float = 0.2
 
     enemy_radius: float = 12.0
     enemy_base_speed: float = 72.0

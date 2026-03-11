@@ -6,6 +6,7 @@ from game.entities.entity import Entity, Vec2, clamp_to_world, vec2_from_payload
 @dataclass(slots=True)
 class Player(Entity):
     player_id: str = ""
+    character_id: str = ""
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     speed: float = 250.0
     max_health: int = 100
@@ -13,8 +14,9 @@ class Player(Entity):
     coin_pickup_radius: float = 14.0
     aim_position: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     coins: int = 0
-    shoot_cooldown_seconds: float = 0.2
-    shoot_cooldown_remaining: float = 0.0
+    throw_cooldown_seconds: float = 0.2
+    throw_cooldown_remaining: float = 0.0
+    last_attack_tick: int = -1
     damage_iframe_seconds: float = 0.4
     damage_iframe_remaining: float = 0.0
 
@@ -23,7 +25,7 @@ class Player(Entity):
         self.position.y += self.velocity.y * dt
         clamp_to_world(self.position, self.radius, world_width, world_height)
 
-        self.shoot_cooldown_remaining = max(0.0, self.shoot_cooldown_remaining - dt)
+        self.throw_cooldown_remaining = max(0.0, self.throw_cooldown_remaining - dt)
         self.damage_iframe_remaining = max(0.0, self.damage_iframe_remaining - dt)
 
     def set_movement(self, move_x: float, move_y: float) -> None:
@@ -35,11 +37,13 @@ class Player(Entity):
         normalized = direction.normalized()
         self.velocity = normalized * self.speed
 
-    def can_shoot(self) -> bool:
-        return self.shoot_cooldown_remaining <= 0.0 and self.alive
+    def can_throw(self) -> bool:
+        return self.throw_cooldown_remaining <= 0.0 and self.alive
 
-    def on_shot_fired(self) -> None:
-        self.shoot_cooldown_remaining = self.shoot_cooldown_seconds
+    def on_projectile_thrown(self, attack_tick: int | None = None) -> None:
+        self.throw_cooldown_remaining = self.throw_cooldown_seconds
+        if attack_tick is not None:
+            self.last_attack_tick = attack_tick
 
     def take_damage(self, amount: int) -> None:
         if self.damage_iframe_remaining > 0.0 or not self.alive:
@@ -55,6 +59,7 @@ class Player(Entity):
         payload.update(
             {
                 "player_id": self.player_id,
+                "character_id": self.character_id,
                 "velocity": self.velocity.to_dict(),
                 "speed": float(self.speed),
                 "max_health": self.max_health,
@@ -62,8 +67,9 @@ class Player(Entity):
                 "coin_pickup_radius": float(self.coin_pickup_radius),
                 "aim_position": self.aim_position.to_dict(),
                 "coins": self.coins,
-                "shoot_cooldown_seconds": float(self.shoot_cooldown_seconds),
-                "shoot_cooldown_remaining": float(self.shoot_cooldown_remaining),
+                "throw_cooldown_seconds": float(self.throw_cooldown_seconds),
+                "throw_cooldown_remaining": float(self.throw_cooldown_remaining),
+                "last_attack_tick": int(self.last_attack_tick),
                 "damage_iframe_seconds": float(self.damage_iframe_seconds),
                 "damage_iframe_remaining": float(self.damage_iframe_remaining),
             }
@@ -75,6 +81,7 @@ class Player(Entity):
         return cls(
             entity_id=int(payload.get("entity_id", 0)),
             player_id=str(payload.get("player_id", "")),
+            character_id=str(payload.get("character_id", "")),
             position=vec2_from_payload(payload, "position"),
             radius=float(payload.get("radius", 0.0)),
             alive=bool(payload.get("alive", True)),
@@ -85,8 +92,16 @@ class Player(Entity):
             coin_pickup_radius=float(payload.get("coin_pickup_radius", payload.get("radius", 0.0))),
             aim_position=vec2_from_payload(payload, "aim_position"),
             coins=int(payload.get("coins", 0)),
-            shoot_cooldown_seconds=float(payload.get("shoot_cooldown_seconds", 0.2)),
-            shoot_cooldown_remaining=float(payload.get("shoot_cooldown_remaining", 0.0)),
+            throw_cooldown_seconds=float(
+                payload.get("throw_cooldown_seconds", payload.get("shoot_cooldown_seconds", 0.2))
+            ),
+            throw_cooldown_remaining=float(
+                payload.get(
+                    "throw_cooldown_remaining",
+                    payload.get("shoot_cooldown_remaining", 0.0),
+                )
+            ),
+            last_attack_tick=int(payload.get("last_attack_tick", -1)),
             damage_iframe_seconds=float(payload.get("damage_iframe_seconds", 0.4)),
             damage_iframe_remaining=float(payload.get("damage_iframe_remaining", 0.0)),
         )

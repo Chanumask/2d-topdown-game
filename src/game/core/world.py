@@ -61,16 +61,17 @@ class World:
             projectile_radius=self.settings.projectile_radius,
         )
 
-    def add_player(self, player_id: str) -> None:
+    def add_player(self, player_id: str, character_id: str | None = None) -> None:
         if player_id in self.players:
             return
 
         spawn = Vec2(self.world_width * 0.5, self.world_height * 0.5)
+        resolved_character_id = character_id or self.settings.default_player_character_id
         base_health = self.settings.player_max_health + self.run_modifiers.player_max_health_bonus
         base_speed = self.settings.player_speed + self.run_modifiers.player_speed_bonus
-        shot_cooldown = max(
+        throw_cooldown = max(
             0.05,
-            self.settings.shoot_cooldown_seconds - self.run_modifiers.shoot_cooldown_reduction,
+            self.settings.throw_cooldown_seconds - self.run_modifiers.throw_cooldown_reduction,
         )
         pickup_radius = max(
             self.settings.player_radius,
@@ -80,6 +81,7 @@ class World:
         self.players[player_id] = Player(
             entity_id=self._allocate_entity_id(),
             player_id=player_id,
+            character_id=resolved_character_id,
             position=spawn,
             radius=self.settings.player_radius,
             speed=base_speed,
@@ -87,10 +89,20 @@ class World:
             health=base_health,
             coin_pickup_radius=pickup_radius,
             aim_position=spawn.copy(),
-            shoot_cooldown_seconds=shot_cooldown,
+            throw_cooldown_seconds=throw_cooldown,
             damage_iframe_seconds=self.settings.player_touch_iframe_seconds,
         )
         self.enemies_killed_by_player.setdefault(player_id, 0)
+
+    def ensure_min_bounds(self, min_width: float, min_height: float) -> None:
+        updated_width = max(self.world_width, float(min_width))
+        updated_height = max(self.world_height, float(min_height))
+        if updated_width == self.world_width and updated_height == self.world_height:
+            return
+
+        self.world_width = updated_width
+        self.world_height = updated_height
+        self._clamp_entities_to_world_bounds()
 
     def apply_actions(self, player_id: str, actions: PlayerActions) -> None:
         self._pending_actions[player_id] = actions
@@ -280,8 +292,8 @@ class World:
             if actions.aim_position is not None:
                 player.aim_position = Vec2(*actions.aim_position)
 
-            if actions.shoot:
-                self.combat.try_shoot(self, player)
+            if actions.throw:
+                self.combat.try_throw_projectile(self, player)
 
         self._pending_actions.clear()
 
@@ -355,6 +367,47 @@ class World:
             self.session.set_game_over()
             if self.final_run_result is None:
                 self.final_run_result = self.build_run_result()
+
+    def _clamp_entities_to_world_bounds(self) -> None:
+        for player in self.players.values():
+            player.position.x = max(
+                player.radius,
+                min(player.position.x, self.world_width - player.radius),
+            )
+            player.position.y = max(
+                player.radius,
+                min(player.position.y, self.world_height - player.radius),
+            )
+
+        for enemy in self.enemies.values():
+            enemy.position.x = max(
+                enemy.radius,
+                min(enemy.position.x, self.world_width - enemy.radius),
+            )
+            enemy.position.y = max(
+                enemy.radius,
+                min(enemy.position.y, self.world_height - enemy.radius),
+            )
+
+        for projectile in self.projectiles.values():
+            projectile.position.x = max(
+                projectile.radius,
+                min(projectile.position.x, self.world_width - projectile.radius),
+            )
+            projectile.position.y = max(
+                projectile.radius,
+                min(projectile.position.y, self.world_height - projectile.radius),
+            )
+
+        for coin in self.coins.values():
+            coin.position.x = max(
+                coin.radius,
+                min(coin.position.x, self.world_width - coin.radius),
+            )
+            coin.position.y = max(
+                coin.radius,
+                min(coin.position.y, self.world_height - coin.radius),
+            )
 
     def _allocate_entity_id(self) -> int:
         entity_id = self._next_entity_id
