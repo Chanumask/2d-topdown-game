@@ -257,10 +257,11 @@ class Renderer:
             )
             throw_clip = self.character_library.get_animation_clip(character_id, ANIM_THROW)
             if throw_clip is not None:
-                state.throw_time_remaining_seconds = max(
-                    state.throw_time_remaining_seconds,
-                    throw_clip.duration_seconds,
-                )
+                # Force replay from frame 0 on each real throw event.
+                state.current_animation = ""
+                state.frame_index = 0
+                state.frame_progress_seconds = 0.0
+                state.throw_time_remaining_seconds = max(0.0, throw_clip.duration_seconds)
 
         state.throw_time_remaining_seconds = max(
             0.0,

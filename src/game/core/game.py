@@ -381,6 +381,8 @@ class GameApp:
                 move_right=actions.move_right,
                 aim_position=aim_world,
                 throw=actions.throw,
+                throw_pressed=actions.throw_pressed,
+                throw_held=actions.throw_held,
             )
         return transformed
 

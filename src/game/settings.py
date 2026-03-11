@@ -17,7 +17,7 @@ class GameSettings:
     player_speed: float = 250.0
     player_max_health: int = 100
     player_touch_iframe_seconds: float = 0.4
-    throw_cooldown_seconds: float = 0.2
+    throw_cooldown_seconds: float = 0.35
 
     enemy_radius: float = 12.0
     enemy_base_speed: float = 72.0

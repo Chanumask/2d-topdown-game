@@ -23,7 +23,10 @@ class InputHandler:
                 request_pause = True
 
         keys = pygame.key.get_pressed()
+        mouse_buttons = pygame.mouse.get_pressed(num_buttons=3)
         mouse_x, mouse_y = pygame.mouse.get_pos()
+        throw_held = bool(mouse_buttons[0])
+        throw_intent = throw_pressed or throw_held
 
         gameplay_actions = PlayerActions(
             move_up=bool(keys[pygame.K_w]),
@@ -31,7 +34,9 @@ class InputHandler:
             move_left=bool(keys[pygame.K_a]),
             move_right=bool(keys[pygame.K_d]),
             aim_position=(float(mouse_x), float(mouse_y)),
-            throw=throw_pressed,
+            throw=throw_intent,
+            throw_pressed=throw_pressed,
+            throw_held=throw_held,
         )
         session_actions = SessionActions(request_pause=request_pause)
 

@@ -14,7 +14,7 @@ class Player(Entity):
     coin_pickup_radius: float = 14.0
     aim_position: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     coins: int = 0
-    throw_cooldown_seconds: float = 0.2
+    throw_cooldown_seconds: float = 0.35
     throw_cooldown_remaining: float = 0.0
     last_attack_tick: int = -1
     damage_iframe_seconds: float = 0.4
@@ -93,7 +93,10 @@ class Player(Entity):
             aim_position=vec2_from_payload(payload, "aim_position"),
             coins=int(payload.get("coins", 0)),
             throw_cooldown_seconds=float(
-                payload.get("throw_cooldown_seconds", payload.get("shoot_cooldown_seconds", 0.2))
+                payload.get(
+                    "throw_cooldown_seconds",
+                    payload.get("shoot_cooldown_seconds", 0.35),
+                )
             ),
             throw_cooldown_remaining=float(
                 payload.get(

@@ -11,6 +11,8 @@ class PlayerActions:
     move_right: bool = False
     aim_position: tuple[float, float] | None = None
     throw: bool = False
+    throw_pressed: bool = False
+    throw_held: bool = False
 
     @property
     def move_x(self) -> float:
@@ -32,6 +34,8 @@ class PlayerActions:
             "move_right": self.move_right,
             "aim": aim,
             "throw": self.throw,
+            "throw_pressed": self.throw_pressed,
+            "throw_held": self.throw_held,
         }
 
     @classmethod
@@ -44,11 +48,17 @@ class PlayerActions:
             aim_y = float(aim_payload.get("y", 0.0))
             aim_position = (aim_x, aim_y)
 
+        throw_pressed = bool(payload.get("throw_pressed", False))
+        throw_held = bool(payload.get("throw_held", False))
+        throw = bool(payload.get("throw", payload.get("shoot", False)))
+
         return cls(
             move_up=bool(payload.get("move_up", False)),
             move_down=bool(payload.get("move_down", False)),
             move_left=bool(payload.get("move_left", False)),
             move_right=bool(payload.get("move_right", False)),
             aim_position=aim_position,
-            throw=bool(payload.get("throw", payload.get("shoot", False))),
+            throw=(throw or throw_pressed or throw_held),
+            throw_pressed=throw_pressed,
+            throw_held=throw_held,
         )
