@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
-from game.core.blessings import random_blessing_id
+from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase, SessionState
 from game.core.snapshot import WorldSnapshot
@@ -15,6 +15,12 @@ from game.input.session_actions import SessionActions
 from game.settings import GameSettings
 from game.systems import BlessingSystem, CombatSystem, EnemySpawner
 from game.systems.collision import circles_overlap, nearest_player
+
+
+@dataclass(slots=True)
+class DamageAuraState:
+    remaining_seconds: float
+    tick_cooldown_seconds: float = 0.0
 
 
 @dataclass(slots=True)
@@ -30,6 +36,7 @@ class World:
     projectiles: dict[int, Projectile] = field(default_factory=dict)
     coins: dict[int, Coin] = field(default_factory=dict)
     blessings: dict[int, Blessing] = field(default_factory=dict)
+    active_damage_auras: dict[str, DamageAuraState] = field(default_factory=dict)
     coin_vacuum_target_player_id: str | None = None
     coin_vacuum_coin_ids: set[int] = field(default_factory=set)
     tick: int = 0
@@ -167,6 +174,7 @@ class World:
         self.combat.update_projectiles(self, dt)
         self.combat.resolve(self)
         self._update_coin_vacuum(dt)
+        self._update_damage_auras(dt)
 
         self._collect_coins()
         self._collect_blessings()
@@ -195,6 +203,16 @@ class World:
         coins = [self.coins[coin_id].to_dict() for coin_id in sorted(self.coins)]
         blessings = [
             self.blessings[blessing_id].to_dict() for blessing_id in sorted(self.blessings)
+        ]
+        active_blessings = [
+            {
+                "player_id": player_id,
+                "blessing_id": BLESSING_DAMAGE_AURA,
+                "remaining_seconds": aura.remaining_seconds,
+                "radius": float(self.settings.damage_aura_radius),
+            }
+            for player_id, aura in sorted(self.active_damage_auras.items())
+            if aura.remaining_seconds > 0.0
         ]
         vfx_events = list(self._pending_vfx_events)
 
@@ -228,6 +246,7 @@ class World:
             projectiles=projectiles,
             coins=coins,
             blessings=blessings,
+            active_blessings=active_blessings,
             vfx_events=vfx_events,
             score=score,
             difficulty=difficulty,
@@ -327,6 +346,16 @@ class World:
 
         self.coin_vacuum_target_player_id = collector_player_id
         self.coin_vacuum_coin_ids = {coin_id for coin_id, coin in self.coins.items() if coin.alive}
+
+    def activate_damage_aura(self, collector_player_id: str) -> None:
+        collector = self.players.get(collector_player_id)
+        if collector is None or not collector.alive:
+            return
+
+        self.active_damage_auras[collector_player_id] = DamageAuraState(
+            remaining_seconds=float(self.settings.damage_aura_duration_seconds),
+            tick_cooldown_seconds=max(0.05, float(self.settings.damage_aura_tick_interval_seconds)),
+        )
 
     def defeat_enemy(self, enemy: Enemy, killer_player_id: str | None) -> None:
         self.register_enemy_kill(killer_player_id)
@@ -468,6 +497,47 @@ class World:
             else:
                 coin.position = coin.position + direction.normalized() * move_distance
 
+    def _update_damage_auras(self, dt: float) -> None:
+        if not self.active_damage_auras:
+            return
+
+        expired_player_ids: list[str] = []
+        tick_interval = max(0.05, float(self.settings.damage_aura_tick_interval_seconds))
+        for player_id, aura in self.active_damage_auras.items():
+            player = self.players.get(player_id)
+            if player is None or not player.alive:
+                expired_player_ids.append(player_id)
+                continue
+
+            aura.remaining_seconds = max(0.0, aura.remaining_seconds - dt)
+            if aura.remaining_seconds <= 0.0:
+                expired_player_ids.append(player_id)
+                continue
+
+            aura.tick_cooldown_seconds = max(0.0, aura.tick_cooldown_seconds - dt)
+            if aura.tick_cooldown_seconds > 0.0:
+                continue
+
+            self._apply_damage_aura_tick(player_id, player)
+            aura.tick_cooldown_seconds = tick_interval
+
+        for player_id in expired_player_ids:
+            self.active_damage_auras.pop(player_id, None)
+
+    def _apply_damage_aura_tick(self, player_id: str, player: Player) -> None:
+        damage = max(1, int(self.settings.damage_aura_damage_per_tick))
+        aura_radius = max(1.0, float(self.settings.damage_aura_radius))
+        for enemy in list(self.enemies.values()):
+            if not enemy.alive:
+                continue
+            if not circles_overlap(player.position, aura_radius, enemy.position, enemy.radius):
+                continue
+
+            enemy.take_damage(damage)
+            if enemy.alive:
+                continue
+            self.defeat_enemy(enemy, killer_player_id=player_id)
+
     def _collect_blessings(self) -> None:
         for blessing in list(self.blessings.values()):
             if not blessing.alive:
@@ -503,6 +573,11 @@ class World:
         self.coin_vacuum_coin_ids.intersection_update(self.coins)
         if not self.coin_vacuum_coin_ids:
             self.coin_vacuum_target_player_id = None
+        self.active_damage_auras = {
+            player_id: aura
+            for player_id, aura in self.active_damage_auras.items()
+            if aura.remaining_seconds > 0.0 and self.players.get(player_id) is not None
+        }
         self.blessings = {
             blessing_id: blessing
             for blessing_id, blessing in self.blessings.items()

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from game.core.blessings import (
     BLESSING_COIN_VACUUM,
+    BLESSING_DAMAGE_AURA,
     BLESSING_ENEMY_CLEAR,
     BLESSING_FULL_HEAL,
     get_blessing,
@@ -30,6 +31,9 @@ class BlessingSystem:
                 collector_player_id,
                 animated_effect_id=animated_effect_id,
             )
+            return
+        if blessing_id == BLESSING_DAMAGE_AURA:
+            self._apply_damage_aura(world, collector_player_id)
 
     @staticmethod
     def _apply_coin_vacuum(world: World, collector_player_id: str) -> None:
@@ -54,3 +58,7 @@ class BlessingSystem:
             if animated_effect_id is not None:
                 world.emit_world_vfx(animated_effect_id, enemy.position.copy())
             world.defeat_enemy(enemy, killer_player_id=collector_player_id)
+
+    @staticmethod
+    def _apply_damage_aura(world: World, collector_player_id: str) -> None:
+        world.activate_damage_aura(collector_player_id)

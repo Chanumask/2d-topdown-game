@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 
 import pygame
 
-from game.core.blessings import BLESSING_VFX_ENEMY_CLEAR, BLESSING_VFX_FULL_HEAL
+from game.core.blessings import (
+    BLESSING_VFX_DAMAGE_AURA,
+    BLESSING_VFX_ENEMY_CLEAR,
+    BLESSING_VFX_FULL_HEAL,
+)
 from game.render.spritesheet import load_image, pixelart_upscale_surface
 
 if TYPE_CHECKING:
@@ -71,6 +75,10 @@ EFFECT_SHEET_CATALOG: dict[str, EffectSheetDefinition] = {
         sheet_key="red_sheet",
         image_path="assets/effects/red_effectsheet.png",
     ),
+    "blue_sheet": EffectSheetDefinition(
+        sheet_key="blue_sheet",
+        image_path="assets/effects/blue_effectsheet.png",
+    ),
 }
 
 # Frame coordinates use a 16x16 grid, with (0, 0) at the top-left tile.
@@ -90,6 +98,14 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         fps=14.0,
         scale_multiple=3,
         loop=False,
+    ),
+    BLESSING_VFX_DAMAGE_AURA: EffectDefinition(
+        effect_id=BLESSING_VFX_DAMAGE_AURA,
+        sheet_key="blue_sheet",
+        frame_sequence=((28, 8), (27, 8), (26, 8), (25, 8), (24, 8)),
+        fps=5.0 / _BLESSING_VFX_TARGET_DURATION_SECONDS,
+        scale_multiple=9,
+        loop=True,
     ),
 }
 

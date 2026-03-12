@@ -17,8 +17,10 @@ class BlessingDefinition:
 BLESSING_COIN_VACUUM = "coin_vacuum"
 BLESSING_FULL_HEAL = "full_heal"
 BLESSING_ENEMY_CLEAR = "enemy_clear"
+BLESSING_DAMAGE_AURA = "damage_aura"
 BLESSING_VFX_FULL_HEAL = "blessing_full_heal_green"
 BLESSING_VFX_ENEMY_CLEAR = "blessing_enemy_clear_red"
+BLESSING_VFX_DAMAGE_AURA = "blessing_damage_aura_blue"
 
 
 BLESSING_CATALOG: dict[str, BlessingDefinition] = {
@@ -42,6 +44,13 @@ BLESSING_CATALOG: dict[str, BlessingDefinition] = {
         description="Remove all alive enemies and trigger their normal drops.",
         icon_path="assets/effects/blessings/enemy_clear.png",
         animated_effect_id=BLESSING_VFX_ENEMY_CLEAR,
+    ),
+    BLESSING_DAMAGE_AURA: BlessingDefinition(
+        blessing_id=BLESSING_DAMAGE_AURA,
+        display_name="Damage Aura",
+        description="Emit a damaging aura around the player for 30 seconds.",
+        icon_path="assets/effects/blessings/damage_aura.png",
+        animated_effect_id=BLESSING_VFX_DAMAGE_AURA,
     ),
 }
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pygame
 
+from game.core.blessings import BLESSING_DAMAGE_AURA, BLESSING_VFX_DAMAGE_AURA
 from game.core.snapshot import WorldSnapshot
 from game.render.blessings import BlessingSpriteLibrary
 from game.render.camera import Camera
@@ -44,6 +45,12 @@ class EnemyAnimationState:
     frame_progress_seconds: float = 0.0
 
 
+@dataclass(slots=True)
+class TimedBlessingAnimationState:
+    frame_index: int = 0
+    frame_progress_seconds: float = 0.0
+
+
 class Renderer:
     def __init__(
         self,
@@ -64,6 +71,7 @@ class Renderer:
         self.ground_layer = AshlandGroundLayer()
         self.player_animation_states: dict[str, PlayerAnimationState] = {}
         self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
+        self.damage_aura_animation_states: dict[str, TimedBlessingAnimationState] = {}
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
         self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
@@ -110,6 +118,7 @@ class Renderer:
         self._draw_blessings(snapshot)
         self._draw_enemies(snapshot, render_dt)
         self._draw_projectiles(snapshot)
+        self._draw_damage_auras(snapshot, render_dt)
         self._draw_players(snapshot, render_dt)
         self._draw_world_effects(render_dt)
         self.top_hud.render(self.screen, snapshot)
@@ -173,7 +182,6 @@ class Renderer:
             center = self.camera.world_to_screen(position)
             aim_position = self._read_position_dict(player.get("aim_position"))
             direction_x = aim_position[0] - position[0]
-            direction_y = aim_position[1] - position[1]
 
             animation_state = self.player_animation_states.setdefault(
                 player_id,
@@ -191,7 +199,7 @@ class Renderer:
             clip = self.character_library.get_animation_clip(character_id, target_animation)
 
             if clip is None or not clip.frames:
-                self._draw_player_fallback_circle(player, center, direction_x, direction_y)
+                self._draw_player_fallback_circle(player, center)
                 continue
 
             self._advance_animation(animation_state, clip, target_animation, render_dt)
@@ -201,8 +209,6 @@ class Renderer:
 
             sprite_rect = current_frame.get_rect(center=center)
             self.screen.blit(current_frame, sprite_rect)
-
-            self._draw_player_aim_line(player, center, direction_x, direction_y)
 
         self._drop_stale_animation_states(active_player_ids)
 
@@ -285,30 +291,9 @@ class Renderer:
         self,
         player: dict[str, object],
         center: tuple[int, int],
-        direction_x: float,
-        direction_y: float,
     ) -> None:
         radius = round(float(player.get("radius", self.settings.player_radius)))
         pygame.draw.circle(self.screen, self.settings.player_color, center, radius)
-        self._draw_player_aim_line(player, center, direction_x, direction_y)
-
-    def _draw_player_aim_line(
-        self,
-        player: dict[str, object],
-        center: tuple[int, int],
-        direction_x: float,
-        direction_y: float,
-    ) -> None:
-        if direction_x == 0.0 and direction_y == 0.0:
-            return
-
-        magnitude = (direction_x**2 + direction_y**2) ** 0.5
-        aim_distance = float(player.get("radius", self.settings.player_radius)) + 18.0
-        end = (
-            round(center[0] + (direction_x / magnitude) * aim_distance),
-            round(center[1] + (direction_y / magnitude) * aim_distance),
-        )
-        pygame.draw.line(self.screen, self.settings.player_aim_color, center, end, 3)
 
     def _drop_stale_animation_states(self, active_player_ids: set[str]) -> None:
         self.player_animation_states = {
@@ -432,6 +417,58 @@ class Renderer:
         self.screen.blit(sprite, sprite_rect)
         return True
 
+    def _draw_damage_auras(self, snapshot: WorldSnapshot, render_dt: float) -> None:
+        aura_clip = self.world_effect_player.library.get_clip(BLESSING_VFX_DAMAGE_AURA)
+        if aura_clip is None or not aura_clip.frames:
+            self.damage_aura_animation_states.clear()
+            return
+
+        player_positions: dict[str, tuple[float, float]] = {}
+        for player in snapshot.players:
+            if not isinstance(player, dict):
+                continue
+
+            player_id = str(player.get("player_id", ""))
+            if not player_id or not bool(player.get("alive", True)):
+                continue
+            player_positions[player_id] = self._read_position(player)
+
+        active_player_ids: set[str] = set()
+        for blessing in snapshot.active_blessings:
+            if not isinstance(blessing, dict):
+                continue
+            if str(blessing.get("blessing_id", "")) != BLESSING_DAMAGE_AURA:
+                continue
+
+            player_id = str(blessing.get("player_id", ""))
+            if not player_id:
+                continue
+            position = player_positions.get(player_id)
+            if position is None:
+                continue
+
+            active_player_ids.add(player_id)
+            state = self.damage_aura_animation_states.setdefault(
+                player_id,
+                TimedBlessingAnimationState(),
+            )
+            self._advance_looping_animation(
+                state,
+                fps=float(aura_clip.fps),
+                frame_count=len(aura_clip.frames),
+                render_dt=render_dt,
+            )
+
+            frame = aura_clip.frames[state.frame_index]
+            frame_rect = frame.get_rect(center=self.camera.world_to_screen(position))
+            self.screen.blit(frame, frame_rect)
+
+        self.damage_aura_animation_states = {
+            player_id: state
+            for player_id, state in self.damage_aura_animation_states.items()
+            if player_id in active_player_ids
+        }
+
     def _draw_world_effects(self, render_dt: float) -> None:
         self.world_effect_player.update_and_draw(
             self.screen,
@@ -452,3 +489,20 @@ class Renderer:
         if isinstance(payload, dict):
             return (float(payload.get("x", 0.0)), float(payload.get("y", 0.0)))
         return (0.0, 0.0)
+
+    @staticmethod
+    def _advance_looping_animation(
+        state: TimedBlessingAnimationState,
+        *,
+        fps: float,
+        frame_count: int,
+        render_dt: float,
+    ) -> None:
+        if frame_count <= 0:
+            return
+
+        frame_duration = 1.0 / max(0.01, fps)
+        state.frame_progress_seconds += max(0.0, render_dt)
+        while state.frame_progress_seconds >= frame_duration:
+            state.frame_progress_seconds -= frame_duration
+            state.frame_index = (state.frame_index + 1) % frame_count
