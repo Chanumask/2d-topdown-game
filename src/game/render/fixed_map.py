@@ -1,19 +1,33 @@
-from game.render.maps.ashland_basic_map import ASHLAND_BASIC_MAP
-from game.render.maps.types import (
-    SOURCE_TILE_SIZE,
-    FixedTileMap,
-    StructurePlacement,
-    TilePlacement,
+from pathlib import Path
+
+from game.render.map_loader import (
+    DEFAULT_MAPS_ROOT,
+    DEFAULT_RENDER_TILE_SIZE,
+    MapDefinition,
+    load_map,
 )
 
-# Canonical active map.
-ASHLAND_ACTIVE_MAP = ASHLAND_BASIC_MAP
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+SOURCE_TILE_SIZE = 16
+DEFAULT_MAP_ID = "ashland_map"
+DEFAULT_MAPS_FOLDER = DEFAULT_MAPS_ROOT
+DEFAULT_LAYER_RENDER_SIZE = DEFAULT_RENDER_TILE_SIZE
+
+
+def load_active_map() -> MapDefinition:
+    return load_map(
+        DEFAULT_MAP_ID,
+        maps_root=DEFAULT_MAPS_FOLDER,
+        render_tile_size=DEFAULT_LAYER_RENDER_SIZE,
+        project_root=PROJECT_ROOT,
+    )
+
 
 __all__ = [
-    "ASHLAND_BASIC_MAP",
-    "ASHLAND_ACTIVE_MAP",
-    "FixedTileMap",
+    "DEFAULT_LAYER_RENDER_SIZE",
+    "DEFAULT_MAPS_FOLDER",
+    "DEFAULT_MAP_ID",
+    "MapDefinition",
     "SOURCE_TILE_SIZE",
-    "StructurePlacement",
-    "TilePlacement",
+    "load_active_map",
 ]

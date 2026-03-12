@@ -81,17 +81,24 @@ outside run simulation.
 
 ## Ashland Tileset Pipeline
 
-- Active map path: fixed map rendering from `src/game/render/fixed_map.py`
-- Active base-layer tileset: `assets/tilesets/ashland/tf_A5_ashlands_2.png`
-- Active manifest usage:
-  - `assets/tilesets/ashland/ashland_a5_manifest.py`
-  - Used as tileset-coordinate -> tile-id lookup for fixed-map authoring
-- Active map (`ashland_basic_map`) uses explicit unit map coordinates:
-  - authored as a full `50x38` coordinate grid in
-    `src/game/render/maps/data/ashland_basic_unit_coords.py`
-  - repeated to a `3x3` world (`150x114` tiles) with deterministic center/seam overlays
-- A1/B manifests and tilesets are used as fixed overlay layers (feature + detail placements)
-  on top of the A5 base layer
+- Active map path: safe layered map loading from `src/game/render/map_loader.py`
+- Active map folder: `assets/maps/ashland_map/`
+- One Python file per layer (map-builder export format), each defining:
+  - `LAYER_NAME`
+  - `LAYER_ORDER`
+  - `TILESET_PATH`
+  - `TILE_SIZE`
+  - `MAP_WIDTH`
+  - `MAP_HEIGHT`
+  - `UNIT_COORD_GRID`
+  - optional `MAP_ID`, `TILESET_NAME`
+- Current layer files:
+  - `base_a5_layer.py` (A5 base terrain)
+  - `hazards_a1_layer.py` (A1 hazards/features)
+  - `details_b_layer.py` (B details/props)
+- Layers are validated to share the same width/height and then rendered in `LAYER_ORDER`.
+- Layer files are parsed via AST data extraction (no arbitrary module execution).
+- Tilesets are sliced by per-layer `TILE_SIZE` and rendered using game-side `RENDER_TILE_SIZE`.
 
 ## Implemented Gameplay
 

@@ -9,3 +9,7 @@ def main() -> None:
         GameApp().run()
     finally:
         pygame.quit()
+
+
+if __name__ == "__main__":
+    main()

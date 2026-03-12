@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
@@ -20,6 +21,8 @@ class World:
     settings: GameSettings
     world_width: float
     world_height: float
+    blocking_grid: tuple[tuple[bool, ...], ...] | None = None
+    blocking_tile_size: float = 32.0
     run_modifiers: RunModifiers = field(default_factory=RunModifiers)
     players: dict[str, Player] = field(default_factory=dict)
     enemies: dict[int, Enemy] = field(default_factory=dict)
@@ -66,6 +69,7 @@ class World:
             return
 
         spawn = Vec2(self.world_width * 0.5, self.world_height * 0.5)
+        spawn = self._nearest_walkable_position(spawn, self.settings.player_radius)
         resolved_character_id = character_id or self.settings.default_player_character_id
         base_health = self.settings.player_max_health + self.run_modifiers.player_max_health_bonus
         base_speed = self.settings.player_speed + self.run_modifiers.player_speed_bonus
@@ -142,7 +146,9 @@ class World:
         self.simulation_time += dt
         self._apply_player_actions()
         for player in self.players.values():
+            previous_position = player.position.copy()
             player.update(dt, self.world_width, self.world_height)
+            self._resolve_blocking_for_entity(player, previous_position)
 
         self.spawner.update(self, dt)
         self._update_enemy_ai(dt)
@@ -232,9 +238,10 @@ class World:
         return self.final_run_result
 
     def spawn_enemy(self, position: Vec2, health: int, speed: float, touch_damage: int) -> None:
+        spawn_position = self._nearest_walkable_position(position, self.settings.enemy_radius)
         enemy = Enemy(
             entity_id=self._allocate_entity_id(),
-            position=position,
+            position=spawn_position,
             radius=self.settings.enemy_radius,
             speed=speed,
             max_health=health,
@@ -326,7 +333,9 @@ class World:
             else:
                 enemy.chase(target_player.position)
 
+            previous_position = enemy.position.copy()
             enemy.update(dt, self.world_width, self.world_height)
+            self._resolve_blocking_for_entity(enemy, previous_position)
 
     def _collect_coins(self) -> None:
         for coin in self.coins.values():
@@ -413,3 +422,114 @@ class World:
         entity_id = self._next_entity_id
         self._next_entity_id += 1
         return entity_id
+
+    def _resolve_blocking_for_entity(self, entity: Player | Enemy, previous_position: Vec2) -> None:
+        if not self._has_blocking_grid() or not entity.alive:
+            return
+
+        if not self._position_intersects_blocking(entity.position, entity.radius):
+            return
+
+        attempted_x = entity.position.x
+        attempted_y = entity.position.y
+
+        x_candidate = Vec2(attempted_x, previous_position.y)
+        y_candidate = Vec2(previous_position.x, attempted_y)
+        x_blocked = self._position_intersects_blocking(x_candidate, entity.radius)
+        y_blocked = self._position_intersects_blocking(y_candidate, entity.radius)
+
+        if not x_blocked:
+            entity.position.x = x_candidate.x
+            entity.position.y = x_candidate.y
+            return
+        if not y_blocked:
+            entity.position.x = y_candidate.x
+            entity.position.y = y_candidate.y
+            return
+
+        entity.position.x = previous_position.x
+        entity.position.y = previous_position.y
+
+    def _has_blocking_grid(self) -> bool:
+        return bool(self.blocking_grid) and self.blocking_tile_size > 0.0
+
+    def _position_intersects_blocking(self, position: Vec2, radius: float) -> bool:
+        if not self._has_blocking_grid():
+            return False
+
+        grid = self.blocking_grid
+        if grid is None:
+            return False
+
+        tile_size = self.blocking_tile_size
+        min_col = math.floor((position.x - radius) / tile_size)
+        max_col = math.floor((position.x + radius) / tile_size)
+        min_row = math.floor((position.y - radius) / tile_size)
+        max_row = math.floor((position.y + radius) / tile_size)
+
+        grid_height = len(grid)
+        if grid_height == 0:
+            return False
+        grid_width = len(grid[0])
+        if grid_width == 0:
+            return False
+
+        if max_col < 0 or max_row < 0 or min_col >= grid_width or min_row >= grid_height:
+            return False
+
+        clamped_min_col = max(0, min_col)
+        clamped_max_col = min(grid_width - 1, max_col)
+        clamped_min_row = max(0, min_row)
+        clamped_max_row = min(grid_height - 1, max_row)
+
+        for row in range(clamped_min_row, clamped_max_row + 1):
+            for col in range(clamped_min_col, clamped_max_col + 1):
+                if grid[row][col]:
+                    return True
+        return False
+
+    def _nearest_walkable_position(self, preferred: Vec2, radius: float) -> Vec2:
+        if not self._has_blocking_grid():
+            return preferred.copy()
+
+        if not self._position_intersects_blocking(preferred, radius):
+            return preferred.copy()
+
+        grid = self.blocking_grid
+        if grid is None or not grid or not grid[0]:
+            return preferred.copy()
+
+        tile_size = self.blocking_tile_size
+        grid_height = len(grid)
+        grid_width = len(grid[0])
+        origin_col = math.floor(preferred.x / tile_size)
+        origin_row = math.floor(preferred.y / tile_size)
+        max_distance = max(grid_width, grid_height)
+
+        for distance in range(1, max_distance + 1):
+            min_row = max(0, origin_row - distance)
+            max_row = min(grid_height - 1, origin_row + distance)
+            min_col = max(0, origin_col - distance)
+            max_col = min(grid_width - 1, origin_col + distance)
+
+            for row in range(min_row, max_row + 1):
+                for col in range(min_col, max_col + 1):
+                    if row not in (min_row, max_row) and col not in (min_col, max_col):
+                        continue
+                    if grid[row][col]:
+                        continue
+
+                    candidate = Vec2(
+                        x=min(
+                            max((col + 0.5) * tile_size, radius),
+                            self.world_width - radius,
+                        ),
+                        y=min(
+                            max((row + 0.5) * tile_size, radius),
+                            self.world_height - radius,
+                        ),
+                    )
+                    if not self._position_intersects_blocking(candidate, radius):
+                        return candidate
+
+        return preferred.copy()
