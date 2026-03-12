@@ -26,7 +26,6 @@ target-version = "py311"
 src = ["src"]
 extend-exclude = [
     "assets/maps/",
-    "assets/tilesets/ashland/ashland_a5_manifest.py",
 ]
 
 [tool.ruff.lint]
