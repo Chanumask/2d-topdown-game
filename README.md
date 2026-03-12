@@ -66,6 +66,30 @@ outside run simulation.
 - If the file is missing/invalid, the game falls back to the default pygame font and logs a short
   message
 
+## Audio Foundation
+
+- Audio manager modules:
+  - `src/game/audio/audio_manager.py`
+  - `src/game/audio/audio_assets.py`
+- Asset folders:
+  - `assets/audio/music/`
+  - `assets/audio/sfx/ui/`
+  - `assets/audio/sfx/player/`
+  - `assets/audio/sfx/enemies/`
+  - `assets/audio/sfx/world/`
+- Expected initial filenames:
+  - `assets/audio/music/menu.ogg`
+  - `assets/audio/music/gameplay.ogg`
+  - `assets/audio/sfx/ui/button_hover.wav`
+  - `assets/audio/sfx/ui/button_confirm.wav`
+  - `assets/audio/sfx/player/rock_throw.wav`
+  - `assets/audio/sfx/world/coin_pickup.wav`
+  - `assets/audio/sfx/enemies/enemy_hit.wav`
+  - `assets/audio/sfx/enemies/enemy_death.wav`
+- Missing files are tolerated; the game logs a short warning once per missing asset and continues.
+- Volumes come from profile settings (`master/music/sfx`) and are applied centrally by the audio
+  manager.
+
 ## Character Sprite Assets
 
 - Player sprite assets are expected under `assets/characters/<character_id>/`
@@ -93,9 +117,9 @@ outside run simulation.
   - `UNIT_COORD_GRID`
   - optional `MAP_ID`, `TILESET_NAME`
 - Current layer files:
-  - `base_a5_layer.py` (A5 base terrain)
-  - `hazards_a1_layer.py` (A1 hazards/features)
-  - `details_b_layer.py` (B details/props)
+  - `layer1.py` (base terrain)
+  - `layer2.py` (hazards/features)
+  - `layer3.py` (details/props)
 - Layers are validated to share the same width/height and then rendered in `LAYER_ORDER`.
 - Layer files are parsed via AST data extraction (no arbitrary module execution).
 - Tilesets are sliced by per-layer `TILE_SIZE` and rendered using game-side `RENDER_TILE_SIZE`.

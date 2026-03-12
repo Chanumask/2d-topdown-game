@@ -207,37 +207,47 @@ def _validate_blocking_grid(
 
 def _resolve_tileset_path(layer_file: Path, tileset_path_value: str, *, project_root: Path) -> Path:
     candidate = Path(tileset_path_value)
-    candidates: list[Path] = []
+    assets_root = (project_root / "assets").resolve()
+
     if candidate.is_absolute():
-        candidates.append(candidate)
-    else:
-        candidates.extend(
-            [
-                (project_root / candidate).resolve(),
-                (project_root / "assets" / candidate).resolve(),
-                (layer_file.parent / candidate).resolve(),
-                (layer_file.parent / "assets" / candidate).resolve(),
-            ]
+        if candidate.exists():
+            return candidate
+        raise ValueError(
+            f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' does not exist "
+            f"(resolved absolute path: {candidate})."
         )
 
+    if candidate.parts and candidate.parts[0] == "tilesets":
+        if len(candidate.parts) < 3:
+            raise ValueError(
+                f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' must include tileset "
+                "subfolder hierarchy, e.g. 'tilesets/ashland/your_tileset.png'."
+            )
+
+        resolved = (assets_root / candidate).resolve()
+        if resolved.exists():
+            return resolved
+        raise ValueError(
+            f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' not found at '{resolved}'."
+        )
+
+    if candidate.parts and candidate.parts[0] == "assets":
+        resolved = (project_root / candidate).resolve()
+        if resolved.exists():
+            return resolved
+        raise ValueError(
+            f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' not found at '{resolved}'."
+        )
+
+    candidates = [
+        (project_root / candidate).resolve(),
+        (layer_file.parent / candidate).resolve(),
+    ]
     for resolved in candidates:
         if resolved.exists():
             return resolved
 
-    if not candidate.is_absolute() and candidate.parts and candidate.parts[0] == "tilesets":
-        tilesets_root = (project_root / "assets" / "tilesets").resolve()
-        if tilesets_root.exists():
-            by_name_matches = sorted(tilesets_root.rglob(candidate.name))
-            if len(by_name_matches) == 1:
-                return by_name_matches[0]
-            if len(by_name_matches) > 1:
-                matches = ", ".join(str(path) for path in by_name_matches)
-                raise ValueError(
-                    f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' is ambiguous. "
-                    f"Found multiple matches for '{candidate.name}': {matches}"
-                )
-
-    attempted = ", ".join(str(path) for path in candidates) if candidates else "none"
+    attempted = ", ".join(str(path) for path in candidates)
     raise ValueError(
         f"{layer_file.name}: TILESET_PATH '{tileset_path_value}' does not exist "
         f"(attempted: {attempted})."

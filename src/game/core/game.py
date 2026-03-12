@@ -1,5 +1,6 @@
 import pygame
 
+from game.audio.audio_manager import AudioManager
 from game.core.app_state import AppScreen, AppState
 from game.core.gameloop import GameLoop
 from game.core.profile_store import ProfileStore
@@ -32,6 +33,8 @@ class GameApp:
         self.app_state = AppState()
         self.profile_store = ProfileStore()
         self.profile = self.profile_store.load_or_create_profile()
+        self.audio = AudioManager()
+        self.audio.apply_settings(self.profile.settings)
 
         self.screen = self._apply_display_mode()
         self.clock = pygame.time.Clock()
@@ -71,6 +74,7 @@ class GameApp:
 
     def run(self) -> None:
         while self.app_state.running:
+            self._sync_music_for_current_screen()
             frame_dt = self.clock.tick(SETTINGS.max_render_fps) / 1000.0
             events = pygame.event.get()
 
@@ -95,10 +99,17 @@ class GameApp:
             return
 
         if self.app_state.current_screen is AppScreen.MAIN_MENU:
+            previous_index = self.main_menu.selected_index
             command = self.main_menu.handle_input(
                 menu_actions,
                 self.screen,
                 self.body_font,
+            )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.main_menu.selected_index,
+                selected_or_clicked=menu_actions.select
+                or (menu_actions.mouse_left_click and self.main_menu.hover_index is not None),
             )
             if command == "start_run":
                 self._start_new_run()
@@ -111,10 +122,16 @@ class GameApp:
                 self.app_state.running = False
 
         elif self.app_state.current_screen is AppScreen.SHOP:
+            previous_index = self.shop_menu.selected_index
             command, changed_profile = self.shop_menu.handle_input(
                 menu_actions,
                 self.profile,
                 self.screen,
+            )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.shop_menu.selected_index,
+                selected_or_clicked=menu_actions.select or menu_actions.mouse_left_click,
             )
             if changed_profile:
                 self._save_profile()
@@ -122,15 +139,22 @@ class GameApp:
                 self.app_state.current_screen = AppScreen.MAIN_MENU
 
         elif self.app_state.current_screen is AppScreen.SETTINGS:
+            previous_index = self.settings_menu.selected_index
             before = self.profile.settings.to_dict()
             command = self.settings_menu.handle_input(
                 menu_actions,
                 self.profile.settings,
                 self.screen,
             )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.settings_menu.selected_index,
+                selected_or_clicked=menu_actions.select or menu_actions.mouse_left_click,
+            )
             after = self.profile.settings.to_dict()
             if after != before:
                 self._save_profile()
+                self.audio.apply_settings(self.profile.settings)
                 if before.get("fullscreen") != after.get("fullscreen"):
                     self.screen = self._apply_display_mode()
             if command == "back":
@@ -158,7 +182,13 @@ class GameApp:
             for player_id, session_actions in gameplay_input.session_actions_by_player.items():
                 self.world.apply_session_actions(player_id, session_actions)
 
+            previous_attack_tick, previous_coin_count = self._local_player_progress()
             self.run_loop.advance(frame_dt)
+            current_attack_tick, current_coin_count = self._local_player_progress()
+            if current_attack_tick > previous_attack_tick:
+                self.audio.play_player_rock_throw()
+            if current_coin_count > previous_coin_count:
+                self.audio.play_world_coin_pickup()
 
         elif self.app_state.current_screen is AppScreen.PAUSED:
             menu_actions = self.menu_input.collect(events)
@@ -167,10 +197,17 @@ class GameApp:
                 self.app_state.running = False
                 return
 
+            previous_index = self.pause_menu.selected_index
             command = self.pause_menu.handle_input(
                 menu_actions,
                 self.screen,
                 self.body_font,
+            )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.pause_menu.selected_index,
+                selected_or_clicked=menu_actions.select
+                or (menu_actions.mouse_left_click and self.pause_menu.hover_index is not None),
             )
             if command == "ready":
                 self.world.apply_session_actions(
@@ -193,10 +230,17 @@ class GameApp:
                 self.app_state.running = False
                 return
 
+            previous_index = self.game_over_menu.selected_index
             command = self.game_over_menu.handle_input(
                 menu_actions,
                 self.screen,
                 self.body_font,
+            )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.game_over_menu.selected_index,
+                selected_or_clicked=menu_actions.select
+                or (menu_actions.mouse_left_click and self.game_over_menu.hover_index is not None),
             )
             if command == "start_new_run":
                 self._start_new_run()
@@ -365,6 +409,36 @@ class GameApp:
 
     def _save_profile(self) -> None:
         self.profile_store.save_profile(self.profile)
+
+    def _sync_music_for_current_screen(self) -> None:
+        if self.app_state.current_screen in (
+            AppScreen.MAIN_MENU,
+            AppScreen.SHOP,
+            AppScreen.SETTINGS,
+        ):
+            self.audio.play_menu_music()
+            return
+        self.audio.play_gameplay_music()
+
+    def _play_menu_audio_feedback(
+        self,
+        *,
+        previous_index: int,
+        current_index: int,
+        selected_or_clicked: bool,
+    ) -> None:
+        if current_index != previous_index:
+            self.audio.play_ui_hover()
+        if selected_or_clicked:
+            self.audio.play_ui_confirm()
+
+    def _local_player_progress(self) -> tuple[int, int]:
+        if self.world is None:
+            return -1, 0
+        player = self.world.players.get(self.local_player_id)
+        if player is None:
+            return -1, 0
+        return player.last_attack_tick, player.coins
 
     def _prepare_gameplay_actions(
         self,
