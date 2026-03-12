@@ -9,7 +9,7 @@ import pygame
 
 from game.render.camera import Camera
 from game.render.fixed_map import (
-    ASHLAND_FIRST_MAP,
+    ASHLAND_ACTIVE_MAP,
     SOURCE_TILE_SIZE,
     FixedTileMap,
     StructurePlacement,
@@ -282,7 +282,7 @@ def _compose_overlay_layer(
 class AshlandGroundLayer:
     """Renders fixed Ashland map layers by tile-id lookup through A5/A1/B manifests."""
 
-    def __init__(self, fixed_map: FixedTileMap = ASHLAND_FIRST_MAP) -> None:
+    def __init__(self, fixed_map: FixedTileMap = ASHLAND_ACTIVE_MAP) -> None:
         self.fixed_map = fixed_map
         self.render_tile_size = fixed_map.tile_size
         self.pixel_scale = self.render_tile_size // SOURCE_TILE_SIZE

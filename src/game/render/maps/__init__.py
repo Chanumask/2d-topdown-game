@@ -6,14 +6,10 @@ from game.render.maps.types import (
     TilePlacement,
 )
 
-# Canonical active map.
-ASHLAND_ACTIVE_MAP = ASHLAND_BASIC_MAP
-
 __all__ = [
     "ASHLAND_BASIC_MAP",
-    "ASHLAND_ACTIVE_MAP",
     "FixedTileMap",
-    "SOURCE_TILE_SIZE",
     "StructurePlacement",
     "TilePlacement",
+    "SOURCE_TILE_SIZE",
 ]

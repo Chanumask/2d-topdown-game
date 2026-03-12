@@ -85,13 +85,13 @@ outside run simulation.
 - Active base-layer tileset: `assets/tilesets/ashland/tf_A5_ashlands_2.png`
 - Active manifest usage:
   - `assets/tilesets/ashland/ashland_a5_manifest.py`
-  - Used as tile-id -> tileset-coordinate lookup for the fixed base layer
-- Current first map (`ashland_first_fixed_map`) is intentionally simple:
-  - left background region
-  - vertical transition band through the center
-  - right background region
-- A1/B manifests and tilesets are retained for future expansion, but are not part of the active
-  rendering path right now
+  - Used as tileset-coordinate -> tile-id lookup for fixed-map authoring
+- Active map (`ashland_basic_map`) uses explicit unit map coordinates:
+  - authored as a full `50x38` coordinate grid in
+    `src/game/render/maps/data/ashland_basic_unit_coords.py`
+  - repeated to a `3x3` world (`150x114` tiles) with deterministic center/seam overlays
+- A1/B manifests and tilesets are used as fixed overlay layers (feature + detail placements)
+  on top of the A5 base layer
 
 ## Implemented Gameplay
 
