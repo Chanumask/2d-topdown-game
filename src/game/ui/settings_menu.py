@@ -35,20 +35,6 @@ class SettingsScreen:
         if actions.navigate_down:
             self.selected_index = (self.selected_index + 1) % len(self.items)
 
-        item = self.items[self.selected_index]
-
-        if item == "Back":
-            if actions.select or actions.back:
-                return "back"
-            return None
-
-        if actions.navigate_left:
-            self._adjust(item, settings, -1)
-        if actions.navigate_right:
-            self._adjust(item, settings, 1)
-        if actions.select and item == "Fullscreen":
-            settings.fullscreen = not settings.fullscreen
-
         if actions.mouse_left_click and hovered is not None and actions.mouse_position is not None:
             self.selected_index = hovered
             clicked_item = self.items[hovered]
@@ -77,6 +63,19 @@ class SettingsScreen:
                     self._adjust(clicked_item, settings, 1)
                 elif row_rects[hovered].collidepoint(actions.mouse_position):
                     self._adjust(clicked_item, settings, 1)
+
+        item = self.items[self.selected_index]
+        if item == "Back":
+            if actions.select or actions.back:
+                return "back"
+            return None
+
+        if actions.navigate_left:
+            self._adjust(item, settings, -1)
+        if actions.navigate_right:
+            self._adjust(item, settings, 1)
+        if actions.select and item == "Fullscreen":
+            settings.fullscreen = not settings.fullscreen
 
         if actions.back:
             return "back"

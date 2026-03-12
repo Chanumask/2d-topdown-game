@@ -1,28 +1,28 @@
 {
   "profile": {
-    "last_run_coins": 0,
-    "last_run_enemies_killed": 0,
+    "last_run_coins": 4,
+    "last_run_enemies_killed": 8,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 0
+        "player-1": 4
       },
       "enemies_killed_by_player": {
-        "player-1": 0
+        "player-1": 8
       },
-      "enemies_killed_total": 0,
+      "enemies_killed_total": 8,
       "players": [
         "player-1"
       ],
-      "simulation_time": 34.183333333332676,
-      "survival_time_seconds": 34.183333333332676,
-      "tick": 2051,
-      "total_run_coins": 0
+      "simulation_time": 73.81666666666376,
+      "survival_time_seconds": 73.81666666666376,
+      "tick": 4429,
+      "total_run_coins": 4
     },
-    "last_run_survival_time_seconds": 34.183333333332676,
-    "lifetime_enemies_killed": 75,
-    "lifetime_meta_earned": 60,
-    "lifetime_runs_completed": 13,
-    "meta_currency": 295,
+    "last_run_survival_time_seconds": 73.81666666666376,
+    "lifetime_enemies_killed": 83,
+    "lifetime_meta_earned": 64,
+    "lifetime_runs_completed": 14,
+    "meta_currency": 299,
     "profile_id": "local-profile",
     "settings": {
       "fullscreen": true,
@@ -31,11 +31,7 @@
       "music_volume": 80,
       "sfx_volume": 90
     },
-    "upgrades": {
-      "high_velocity_ammo": 1,
-      "magnet": 3,
-      "quick_boots": 1
-    }
+    "upgrades": {}
   },
   "schema_version": 1
 }

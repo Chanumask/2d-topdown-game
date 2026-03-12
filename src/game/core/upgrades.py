@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from game.settings import SETTINGS, GameSettings
+
 if TYPE_CHECKING:
     from game.core.profile import PlayerProfile
 
@@ -47,9 +49,9 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         description="Increase maximum player health.",
         base_cost=80,
         cost_scaling=1.45,
-        max_level=5,
+        max_level=10,
         effect_type="player_max_health",
-        effect_value_per_level=12.0,
+        effect_value_per_level=20.0,
     ),
     "quick_boots": UpgradeDefinition(
         upgrade_id="quick_boots",
@@ -57,9 +59,9 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         description="Increase player movement speed.",
         base_cost=90,
         cost_scaling=1.50,
-        max_level=5,
+        max_level=10,
         effect_type="player_speed",
-        effect_value_per_level=15.0,
+        effect_value_per_level=40.0,
     ),
     "fast_hands": UpgradeDefinition(
         upgrade_id="fast_hands",
@@ -67,9 +69,9 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         description="Reduce throw cooldown for faster rock throws.",
         base_cost=110,
         cost_scaling=1.55,
-        max_level=6,
+        max_level=10,
         effect_type="throw_cooldown_reduction",
-        effect_value_per_level=0.015,
+        effect_value_per_level=0.08,
     ),
     "high_velocity_ammo": UpgradeDefinition(
         upgrade_id="high_velocity_ammo",
@@ -77,9 +79,9 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         description="Increase rock projectile speed.",
         base_cost=95,
         cost_scaling=1.50,
-        max_level=5,
+        max_level=10,
         effect_type="projectile_speed",
-        effect_value_per_level=35.0,
+        effect_value_per_level=40.0,
     ),
     "magnet": UpgradeDefinition(
         upgrade_id="magnet",
@@ -87,10 +89,18 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         description="Increase coin pickup radius.",
         base_cost=70,
         cost_scaling=1.40,
-        max_level=6,
+        max_level=10,
         effect_type="coin_pickup_radius",
-        effect_value_per_level=6.0,
+        effect_value_per_level=20.0,
     ),
+}
+
+UPGRADE_RUNTIME_LABELS: dict[str, str] = {
+    "health_boost": "Max Health",
+    "quick_boots": "Move Speed",
+    "fast_hands": "Throw Cooldown",
+    "high_velocity_ammo": "Projectile Speed",
+    "magnet": "Pickup Range",
 }
 
 
@@ -100,6 +110,10 @@ def list_upgrades() -> list[UpgradeDefinition]:
 
 def get_upgrade(upgrade_id: str) -> UpgradeDefinition | None:
     return UPGRADE_CATALOG.get(upgrade_id)
+
+
+def get_upgrade_runtime_label(upgrade_id: str) -> str:
+    return UPGRADE_RUNTIME_LABELS.get(upgrade_id, "Value")
 
 
 def compute_upgrade_cost(upgrade: UpgradeDefinition, current_level: int) -> int:
@@ -189,3 +203,31 @@ def build_run_modifiers(upgrades: dict[str, int]) -> RunModifiers:
         projectile_speed_bonus=_value("high_velocity_ammo"),
         coin_pickup_radius_bonus=_value("magnet"),
     )
+
+
+def compute_upgrade_runtime_value(
+    upgrade_id: str,
+    level: int,
+    settings: GameSettings = SETTINGS,
+) -> float:
+    definition = get_upgrade(upgrade_id)
+    if definition is None:
+        return 0.0
+
+    safe_level = max(0, min(int(level), definition.max_level))
+    scaled = float(safe_level) * definition.effect_value_per_level
+
+    if upgrade_id == "health_boost":
+        return float(settings.player_max_health + scaled)
+    if upgrade_id == "quick_boots":
+        return float(settings.player_speed + scaled)
+    if upgrade_id == "fast_hands":
+        return max(0.05, float(settings.throw_cooldown_seconds - scaled))
+    if upgrade_id == "high_velocity_ammo":
+        return max(1.0, float(settings.projectile_speed + scaled))
+    if upgrade_id == "magnet":
+        pickup_radius = max(settings.player_radius, settings.player_radius + scaled)
+        # Effective pickup range is center distance threshold in circles_overlap.
+        return float(pickup_radius + settings.coin_radius)
+
+    return 0.0

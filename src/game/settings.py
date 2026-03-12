@@ -14,10 +14,10 @@ class GameSettings:
     default_player_character_id: str = "dude_monster"
 
     player_radius: float = 14.0
-    player_speed: float = 250.0
+    player_speed: float = 100.0
     player_max_health: int = 100
     player_touch_iframe_seconds: float = 0.4
-    throw_cooldown_seconds: float = 0.35
+    throw_cooldown_seconds: float = 1.0
 
     enemy_radius: float = 12.0
     enemy_base_speed: float = 72.0
@@ -25,7 +25,7 @@ class GameSettings:
     enemy_touch_damage: int = 10
 
     projectile_radius: float = 4.0
-    projectile_speed: float = 460.0
+    projectile_speed: float = 400.0
     projectile_damage: int = 15
     projectile_ttl_seconds: float = 1.3
 

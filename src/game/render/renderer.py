@@ -19,7 +19,7 @@ from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image
 from game.render.tiles import AshlandGroundLayer
 from game.settings import GameSettings
-from game.ui.hud import BottomPlayerHUD
+from game.ui.hud import BottomPlayerHUD, TopRunStatsHUD
 
 ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock1.png"
 COIN_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
@@ -68,6 +68,7 @@ class Renderer:
             local_player_id=local_player_id,
             character_library=self.character_library,
         )
+        self.top_hud = TopRunStatsHUD(fonts=fonts)
 
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
@@ -100,6 +101,7 @@ class Renderer:
         self._draw_enemies(snapshot, render_dt)
         self._draw_projectiles(snapshot)
         self._draw_players(snapshot, render_dt)
+        self.top_hud.render(self.screen, snapshot)
         self.bottom_hud.render(self.screen, snapshot)
 
     def _draw_ground_layer(self, snapshot: WorldSnapshot) -> bool:

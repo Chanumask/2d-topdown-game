@@ -21,6 +21,7 @@ MUSIC_GAMEPLAY = "music_gameplay"
 
 SFX_UI_HOVER = "sfx_ui_hover"
 SFX_UI_CONFIRM = "sfx_ui_confirm"
+SFX_UI_TIMER_TICK = "sfx_ui_timer_tick"
 SFX_PLAYER_ROCK_THROW = "sfx_player_rock_throw"
 SFX_WORLD_COIN_PICKUP = "sfx_world_coin_pickup"
 SFX_ENEMY_HIT = "sfx_enemy_hit"
@@ -53,6 +54,12 @@ SFX_ASSETS: dict[str, AudioAsset] = {
         path=_asset("assets/audio/sfx/ui/button_confirm.wav"),
         category="ui",
         base_volume=0.75,
+    ),
+    SFX_UI_TIMER_TICK: AudioAsset(
+        key=SFX_UI_TIMER_TICK,
+        path=_asset("assets/audio/sfx/ui/timer_tick.wav"),
+        category="ui",
+        base_volume=0.7,
     ),
     SFX_PLAYER_ROCK_THROW: AudioAsset(
         key=SFX_PLAYER_ROCK_THROW,

@@ -14,12 +14,15 @@ from game.audio.audio_assets import (
     SFX_PLAYER_ROCK_THROW,
     SFX_UI_CONFIRM,
     SFX_UI_HOVER,
+    SFX_UI_TIMER_TICK,
     SFX_WORLD_COIN_PICKUP,
     AudioAsset,
 )
 from game.core.profile import UserSettings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+MUSIC_EXTENSION_PRIORITY: tuple[str, ...] = (".ogg", ".mp3", ".wav")
+SFX_EXTENSION_PRIORITY: tuple[str, ...] = (".wav", ".mp3", ".ogg")
 
 
 class AudioManager:
@@ -65,11 +68,15 @@ class AudioManager:
         if self._current_music_key == key and pygame.mixer.music.get_busy() and not restart:
             return True
 
-        resolved = self._resolve_asset_path(asset)
+        resolved = self._resolve_music_asset_path(asset)
         if not resolved.exists():
+            attempted = ", ".join(
+                str(path.relative_to(self.project_root))
+                for path in self._music_candidate_paths(asset)
+            )
             self._log_once(
                 f"missing_music:{key}",
-                f"[Audio] Missing music file: {asset.path}",
+                f"[Audio] Missing music file for '{key}'. Tried: {attempted}",
             )
             return False
 
@@ -91,6 +98,9 @@ class AudioManager:
 
     def play_ui_confirm(self) -> bool:
         return self.play_sfx(SFX_UI_CONFIRM)
+
+    def play_ui_timer_tick(self) -> bool:
+        return self.play_sfx(SFX_UI_TIMER_TICK)
 
     def play_player_rock_throw(self) -> bool:
         return self.play_sfx(SFX_PLAYER_ROCK_THROW)
@@ -125,11 +135,15 @@ class AudioManager:
         if key in self._sound_cache:
             return self._sound_cache[key]
 
-        resolved = self._resolve_asset_path(asset)
+        resolved = self._resolve_sfx_asset_path(asset)
         if not resolved.exists():
+            attempted = ", ".join(
+                str(path.relative_to(self.project_root))
+                for path in self._sfx_candidate_paths(asset)
+            )
             self._log_once(
                 f"missing_sfx:{key}",
-                f"[Audio] Missing SFX file: {asset.path}",
+                f"[Audio] Missing SFX file for '{key}'. Tried: {attempted}",
             )
             self._sound_cache[key] = None
             return None
@@ -146,8 +160,33 @@ class AudioManager:
             self._sound_cache[key] = None
             return None
 
-    def _resolve_asset_path(self, asset: AudioAsset) -> Path:
-        return (self.project_root / asset.path).resolve()
+    def _resolve_music_asset_path(self, asset: AudioAsset) -> Path:
+        for candidate in self._music_candidate_paths(asset):
+            if candidate.exists():
+                return candidate
+        return self._music_candidate_paths(asset)[0]
+
+    def _music_candidate_paths(self, asset: AudioAsset) -> list[Path]:
+        relative_path = asset.path
+        base_relative = relative_path.with_suffix("") if relative_path.suffix else relative_path
+        return [
+            (self.project_root / base_relative.with_suffix(ext)).resolve()
+            for ext in MUSIC_EXTENSION_PRIORITY
+        ]
+
+    def _resolve_sfx_asset_path(self, asset: AudioAsset) -> Path:
+        for candidate in self._sfx_candidate_paths(asset):
+            if candidate.exists():
+                return candidate
+        return self._sfx_candidate_paths(asset)[0]
+
+    def _sfx_candidate_paths(self, asset: AudioAsset) -> list[Path]:
+        relative_path = asset.path
+        base_relative = relative_path.with_suffix("") if relative_path.suffix else relative_path
+        return [
+            (self.project_root / base_relative.with_suffix(ext)).resolve()
+            for ext in SFX_EXTENSION_PRIORITY
+        ]
 
     def _effective_music_volume(self, base: float = 1.0) -> float:
         return _clamp01(self.master_volume * self.music_volume * base)

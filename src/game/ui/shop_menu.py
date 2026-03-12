@@ -1,7 +1,13 @@
 import pygame
 
 from game.core.profile import PlayerProfile
-from game.core.upgrades import UpgradeDefinition, compute_upgrade_cost, list_upgrades
+from game.core.upgrades import (
+    UpgradeDefinition,
+    compute_upgrade_cost,
+    compute_upgrade_runtime_value,
+    get_upgrade_runtime_label,
+    list_upgrades,
+)
 from game.input.menu_actions import MenuActions
 from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
 
@@ -245,10 +251,33 @@ class ShopScreen:
             level = profile.upgrades.get(selected_upgrade.upgrade_id, 0)
             maxed = level >= selected_upgrade.max_level
             next_cost = None if maxed else compute_upgrade_cost(selected_upgrade, level)
-
-            lines.append(
-                f"{selected_upgrade.display_name}  |  Level {level}/{selected_upgrade.max_level}"
+            runtime_label = get_upgrade_runtime_label(selected_upgrade.upgrade_id)
+            current_value = compute_upgrade_runtime_value(selected_upgrade.upgrade_id, level)
+            next_value = (
+                None
+                if maxed
+                else compute_upgrade_runtime_value(selected_upgrade.upgrade_id, level + 1)
             )
+
+            lines.append(f"Upgrade: {selected_upgrade.display_name}")
+            lines.append(
+                "Effect: "
+                f"+{selected_upgrade.effect_value_per_level} "
+                f"{self._format_effect_label(selected_upgrade.effect_type)} per level"
+            )
+            lines.append(f"Current Level: {level}/{selected_upgrade.max_level}")
+            lines.append(
+                f"Current {runtime_label}: "
+                f"{self._format_runtime_value(selected_upgrade.upgrade_id, current_value)}"
+            )
+            if next_value is None:
+                lines.append("Next Level Value: Max Level Reached")
+            else:
+                lines.append(
+                    f"Next {runtime_label}: "
+                    f"{self._format_runtime_value(selected_upgrade.upgrade_id, next_value)}"
+                )
+            lines.append(f"Next Cost: {'MAXED' if next_cost is None else next_cost}")
             lines.extend(
                 wrap_text(
                     body_font,
@@ -256,12 +285,6 @@ class ShopScreen:
                     max_width=max(120, panel_rect.width - 24),
                 )
             )
-            lines.append(
-                "Effect: "
-                f"+{selected_upgrade.effect_value_per_level} "
-                f"{selected_upgrade.effect_type} per level"
-            )
-            lines.append(f"Next Cost: {'MAXED' if next_cost is None else next_cost}")
 
         row_height = max(24, body_font.get_linesize() + 4)
         for index, line in enumerate(lines):
@@ -270,3 +293,13 @@ class ShopScreen:
             if y + row_height > panel_rect.bottom - 8:
                 break
             surface.blit(rendered, (panel_rect.x + 12, y))
+
+    @staticmethod
+    def _format_effect_label(effect_type: str) -> str:
+        return effect_type.replace("_", " ").strip()
+
+    @staticmethod
+    def _format_runtime_value(upgrade_id: str, value: float) -> str:
+        if upgrade_id == "fast_hands":
+            return f"{value:.2f}s"
+        return f"{value:.0f}"

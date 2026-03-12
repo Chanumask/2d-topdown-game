@@ -299,3 +299,66 @@ class BottomPlayerHUD:
         if ratio >= 0.35:
             return (236, 190, 78)
         return (230, 90, 90)
+
+
+class TopRunStatsHUD:
+    def __init__(self, fonts: UIFonts) -> None:
+        self.value_font = fonts.hud
+
+    def render(self, surface: pygame.Surface, snapshot: WorldSnapshot) -> None:
+        panel_rect = self._panel_rect(surface)
+        pygame.draw.rect(surface, (16, 18, 22), panel_rect, border_radius=10)
+        pygame.draw.rect(surface, (86, 96, 110), panel_rect, width=2, border_radius=10)
+
+        stats_line = self._build_stats_line(snapshot)
+        rendered = self.value_font.render(stats_line, True, (230, 232, 238))
+        surface.blit(
+            rendered,
+            rendered.get_rect(center=panel_rect.center),
+        )
+
+    @staticmethod
+    def _panel_rect(surface: pygame.Surface) -> pygame.Rect:
+        margin = 14
+        width = min(980, surface.get_width() - margin * 2)
+        height = 44
+        return pygame.Rect((surface.get_width() - width) // 2, margin, width, height)
+
+    def _build_stats_line(self, snapshot: WorldSnapshot) -> str:
+        difficulty_factor = self._read_float(snapshot.difficulty.get("factor"), default=1.0)
+        spawn_interval = self._read_float(
+            snapshot.difficulty.get("spawn_interval_seconds"),
+            default=0.0,
+        )
+        elapsed = max(0.0, float(snapshot.simulation_time))
+        enemies_alive = len(snapshot.enemies)
+        kills = self._read_int(snapshot.score.get("enemies_killed_total"), default=0)
+
+        return (
+            f"Difficulty x{difficulty_factor:.2f} | "
+            f"Time {self._format_time(elapsed)} | "
+            f"Enemies Alive {enemies_alive} | "
+            f"Kills {kills} | "
+            f"Spawn {spawn_interval:.2f}s"
+        )
+
+    @staticmethod
+    def _format_time(total_seconds: float) -> str:
+        whole_seconds = int(total_seconds)
+        minutes = whole_seconds // 60
+        seconds = whole_seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _read_float(value: object, default: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _read_int(value: object, default: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default

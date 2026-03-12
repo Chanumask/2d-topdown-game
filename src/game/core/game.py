@@ -1,3 +1,5 @@
+import math
+
 import pygame
 
 from game.audio.audio_manager import AudioManager
@@ -24,6 +26,15 @@ from game.ui import (
     ShopScreen,
 )
 from game.ui.widgets import draw_centered_text
+
+MENU_MUSIC_SCREENS = frozenset(
+    {
+        AppScreen.MAIN_MENU,
+        AppScreen.SHOP,
+        AppScreen.SETTINGS,
+        AppScreen.GAME_OVER,
+    }
+)
 
 
 class GameApp:
@@ -71,6 +82,11 @@ class GameApp:
         self.world: World | None = None
         self.run_loop: GameLoop | None = None
         self.current_run_result: RunResult | None = None
+        self._countdown_audio_phase: MatchPhase | None = None
+        self._countdown_audio_second: int | None = None
+
+        # Start menu music immediately on boot.
+        self._sync_music_for_current_screen()
 
     def run(self) -> None:
         while self.app_state.running:
@@ -189,6 +205,7 @@ class GameApp:
                 self.audio.play_player_rock_throw()
             if current_coin_count > previous_coin_count:
                 self.audio.play_world_coin_pickup()
+            self._play_countdown_tick_audio()
 
         elif self.app_state.current_screen is AppScreen.PAUSED:
             menu_actions = self.menu_input.collect(events)
@@ -222,6 +239,7 @@ class GameApp:
                 return
 
             self.run_loop.advance(frame_dt)
+            self._play_countdown_tick_audio()
 
         elif self.app_state.current_screen is AppScreen.GAME_OVER:
             menu_actions = self.menu_input.collect(events)
@@ -367,12 +385,16 @@ class GameApp:
         )
         self.app_state.current_run_banked = False
         self.current_run_result = None
+        self._countdown_audio_phase = None
+        self._countdown_audio_second = None
         self.app_state.current_screen = AppScreen.IN_RUN
 
     def _return_to_main_menu_from_run(self) -> None:
         self.world = None
         self.run_loop = None
         self.current_run_result = None
+        self._countdown_audio_phase = None
+        self._countdown_audio_second = None
         self.app_state.current_screen = AppScreen.MAIN_MENU
         self.app_state.current_run_banked = False
         self.camera.set_world_bounds(SETTINGS.world_width, SETTINGS.world_height)
@@ -411,11 +433,7 @@ class GameApp:
         self.profile_store.save_profile(self.profile)
 
     def _sync_music_for_current_screen(self) -> None:
-        if self.app_state.current_screen in (
-            AppScreen.MAIN_MENU,
-            AppScreen.SHOP,
-            AppScreen.SETTINGS,
-        ):
+        if self.app_state.current_screen in MENU_MUSIC_SCREENS:
             self.audio.play_menu_music()
             return
         self.audio.play_gameplay_music()
@@ -431,6 +449,32 @@ class GameApp:
             self.audio.play_ui_hover()
         if selected_or_clicked:
             self.audio.play_ui_confirm()
+
+    def _play_countdown_tick_audio(self) -> None:
+        if self.world is None:
+            self._countdown_audio_phase = None
+            self._countdown_audio_second = None
+            return
+
+        phase = self.world.session.phase
+        if phase not in {MatchPhase.PAUSE_COUNTDOWN, MatchPhase.RESUME_COUNTDOWN}:
+            self._countdown_audio_phase = None
+            self._countdown_audio_second = None
+            return
+
+        if self._countdown_audio_phase is not phase:
+            self._countdown_audio_phase = phase
+            self._countdown_audio_second = None
+
+        remaining = max(0.0, float(self.world.session.countdown_remaining))
+        current_second = math.ceil(remaining - 1e-6)
+        if current_second <= 0:
+            self._countdown_audio_second = 0
+            return
+
+        if self._countdown_audio_second != current_second:
+            self.audio.play_ui_timer_tick()
+            self._countdown_audio_second = current_second
 
     def _local_player_progress(self) -> tuple[int, int]:
         if self.world is None:

@@ -8,13 +8,13 @@ class Player(Entity):
     player_id: str = ""
     character_id: str = ""
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
-    speed: float = 250.0
+    speed: float = 100.0
     max_health: int = 100
     health: int = 100
     coin_pickup_radius: float = 14.0
     aim_position: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     coins: int = 0
-    throw_cooldown_seconds: float = 0.35
+    throw_cooldown_seconds: float = 1.0
     throw_cooldown_remaining: float = 0.0
     last_attack_tick: int = -1
     damage_iframe_seconds: float = 0.4
@@ -86,7 +86,7 @@ class Player(Entity):
             radius=float(payload.get("radius", 0.0)),
             alive=bool(payload.get("alive", True)),
             velocity=vec2_from_payload(payload, "velocity"),
-            speed=float(payload.get("speed", 250.0)),
+            speed=float(payload.get("speed", 100.0)),
             max_health=int(payload.get("max_health", 100)),
             health=int(payload.get("health", 100)),
             coin_pickup_radius=float(payload.get("coin_pickup_radius", payload.get("radius", 0.0))),
@@ -95,7 +95,7 @@ class Player(Entity):
             throw_cooldown_seconds=float(
                 payload.get(
                     "throw_cooldown_seconds",
-                    payload.get("shoot_cooldown_seconds", 0.35),
+                    payload.get("shoot_cooldown_seconds", 1.0),
                 )
             ),
             throw_cooldown_remaining=float(
