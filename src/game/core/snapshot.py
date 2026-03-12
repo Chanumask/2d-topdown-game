@@ -12,6 +12,8 @@ class WorldSnapshot:
     enemies: list[dict[str, object]]
     projectiles: list[dict[str, object]]
     coins: list[dict[str, object]]
+    blessings: list[dict[str, object]]
+    vfx_events: list[dict[str, object]]
     score: dict[str, object]
     difficulty: dict[str, object]
 
@@ -26,6 +28,8 @@ class WorldSnapshot:
             "enemies": self.enemies,
             "projectiles": self.projectiles,
             "coins": self.coins,
+            "blessings": self.blessings,
+            "vfx_events": self.vfx_events,
             "score": self.score,
             "difficulty": self.difficulty,
         }
@@ -46,6 +50,8 @@ class WorldSnapshot:
             enemies=list(payload.get("enemies", [])),
             projectiles=list(payload.get("projectiles", [])),
             coins=list(payload.get("coins", [])),
+            blessings=list(payload.get("blessings", [])),
+            vfx_events=list(payload.get("vfx_events", [])),
             score=score_payload if isinstance(score_payload, dict) else {},
             difficulty=difficulty_payload if isinstance(difficulty_payload, dict) else {},
         )

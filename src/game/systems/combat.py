@@ -73,8 +73,7 @@ class CombatSystem:
                 projectile.alive = False
 
                 if not enemy.alive:
-                    world.register_enemy_kill(projectile.owner_player_id or None)
-                    world.spawn_coin(position=enemy.position.copy(), value=enemy.coin_drop_value)
+                    world.defeat_enemy(enemy, killer_player_id=projectile.owner_player_id or None)
                 break
 
     def _enemy_contacts_player(self, world: World) -> None:

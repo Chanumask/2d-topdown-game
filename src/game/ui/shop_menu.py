@@ -296,6 +296,8 @@ class ShopScreen:
 
     @staticmethod
     def _format_effect_label(effect_type: str) -> str:
+        if effect_type == "coin_pickup_radius":
+            return "coin and Blessing pickup range"
         return effect_type.replace("_", " ").strip()
 
     @staticmethod

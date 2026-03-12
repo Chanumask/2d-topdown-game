@@ -9,7 +9,7 @@ from game.render.characters import CharacterSpriteLibrary
 from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image, load_pixelart_image
 
-ROCK_ICON_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock1.png"
+ROCK_ICON_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock.png"
 COIN_ICON_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
 HUD_ROCK_ICON_PIXEL_SCALE = 4
 

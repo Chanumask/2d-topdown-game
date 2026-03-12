@@ -31,6 +31,9 @@ class GameSettings:
 
     coin_radius: float = 6.0
     coin_value: int = 1
+    coin_vacuum_pull_speed: float = 1200.0
+    blessing_radius: float = 9.0
+    blessing_drop_rate: float = 0.5
 
     spawn_base_interval_seconds: float = 1.8
     spawn_min_interval_seconds: float = 0.45

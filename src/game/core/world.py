@@ -4,15 +4,16 @@ import math
 import random
 from dataclasses import dataclass, field
 
+from game.core.blessings import random_blessing_id
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase, SessionState
 from game.core.snapshot import WorldSnapshot
 from game.core.upgrades import RunModifiers
-from game.entities import Coin, Enemy, Player, Projectile, Vec2
+from game.entities import Blessing, Coin, Enemy, Player, Projectile, Vec2
 from game.input.actions import PlayerActions
 from game.input.session_actions import SessionActions
 from game.settings import GameSettings
-from game.systems import CombatSystem, EnemySpawner
+from game.systems import BlessingSystem, CombatSystem, EnemySpawner
 from game.systems.collision import circles_overlap, nearest_player
 
 
@@ -28,6 +29,9 @@ class World:
     enemies: dict[int, Enemy] = field(default_factory=dict)
     projectiles: dict[int, Projectile] = field(default_factory=dict)
     coins: dict[int, Coin] = field(default_factory=dict)
+    blessings: dict[int, Blessing] = field(default_factory=dict)
+    coin_vacuum_target_player_id: str | None = None
+    coin_vacuum_coin_ids: set[int] = field(default_factory=set)
     tick: int = 0
     simulation_time: float = 0.0
     total_coins_collected: int = 0
@@ -37,16 +41,21 @@ class World:
     session: SessionState = field(default_factory=SessionState)
     spawner: EnemySpawner = field(init=False)
     combat: CombatSystem = field(init=False)
+    blessing_system: BlessingSystem = field(init=False)
     _rng: random.Random = field(init=False, repr=False)
     _next_entity_id: int = field(init=False, repr=False)
+    _next_vfx_event_id: int = field(init=False, repr=False)
     _pending_actions: dict[str, PlayerActions] = field(init=False, repr=False)
     _pending_session_actions: dict[str, SessionActions] = field(init=False, repr=False)
+    _pending_vfx_events: list[dict[str, object]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._rng = random.Random()
         self._next_entity_id = 1
+        self._next_vfx_event_id = 1
         self._pending_actions = {}
         self._pending_session_actions = {}
+        self._pending_vfx_events = []
 
         self.spawner = EnemySpawner(
             rng=self._rng,
@@ -54,6 +63,7 @@ class World:
             min_interval_seconds=self.settings.spawn_min_interval_seconds,
             acceleration_per_second=self.settings.spawn_acceleration_per_second,
         )
+        self.blessing_system = BlessingSystem()
         self.combat = CombatSystem(
             projectile_speed=max(
                 1.0,
@@ -122,6 +132,7 @@ class World:
 
     def update(self, dt: float) -> None:
         self.tick += 1
+        self._pending_vfx_events.clear()
         self._apply_session_actions()
 
         if self.session.phase is MatchPhase.GAME_OVER:
@@ -155,8 +166,10 @@ class World:
 
         self.combat.update_projectiles(self, dt)
         self.combat.resolve(self)
+        self._update_coin_vacuum(dt)
 
         self._collect_coins()
+        self._collect_blessings()
         self._cleanup_dead_entities()
         self._update_game_over_state()
 
@@ -180,6 +193,10 @@ class World:
             self.projectiles[projectile_id].to_dict() for projectile_id in sorted(self.projectiles)
         ]
         coins = [self.coins[coin_id].to_dict() for coin_id in sorted(self.coins)]
+        blessings = [
+            self.blessings[blessing_id].to_dict() for blessing_id in sorted(self.blessings)
+        ]
+        vfx_events = list(self._pending_vfx_events)
 
         score = {
             "total_run_coins": self.total_coins_collected,
@@ -210,6 +227,8 @@ class World:
             enemies=enemies,
             projectiles=projectiles,
             coins=coins,
+            blessings=blessings,
+            vfx_events=vfx_events,
             score=score,
             difficulty=difficulty,
         )
@@ -280,6 +299,41 @@ class World:
         )
         self.coins[coin.entity_id] = coin
 
+    def spawn_blessing(self, position: Vec2, blessing_id: str) -> None:
+        blessing = Blessing(
+            entity_id=self._allocate_entity_id(),
+            position=position,
+            radius=self.settings.blessing_radius,
+            blessing_id=blessing_id,
+        )
+        self.blessings[blessing.entity_id] = blessing
+
+    def emit_world_vfx(self, effect_id: str, position: Vec2) -> None:
+        if not effect_id:
+            return
+
+        event_payload = {
+            "event_id": self._next_vfx_event_id,
+            "effect_id": effect_id,
+            "position": position.to_dict(),
+        }
+        self._next_vfx_event_id += 1
+        self._pending_vfx_events.append(event_payload)
+
+    def activate_coin_vacuum(self, collector_player_id: str) -> None:
+        collector = self.players.get(collector_player_id)
+        if collector is None or not collector.alive:
+            return
+
+        self.coin_vacuum_target_player_id = collector_player_id
+        self.coin_vacuum_coin_ids = {coin_id for coin_id, coin in self.coins.items() if coin.alive}
+
+    def defeat_enemy(self, enemy: Enemy, killer_player_id: str | None) -> None:
+        self.register_enemy_kill(killer_player_id)
+        self._drop_enemy_reward(position=enemy.position.copy(), coin_value=enemy.coin_drop_value)
+        enemy.health = 0
+        enemy.alive = False
+
     def register_enemy_kill(self, killer_player_id: str | None) -> None:
         self.enemies_killed_total += 1
         if killer_player_id is None:
@@ -287,6 +341,23 @@ class World:
 
         self.enemies_killed_by_player.setdefault(killer_player_id, 0)
         self.enemies_killed_by_player[killer_player_id] += 1
+
+    def _drop_enemy_reward(self, position: Vec2, coin_value: int) -> None:
+        if self._maybe_spawn_blessing_drop(position):
+            return
+        self.spawn_coin(position=position, value=coin_value)
+
+    def _maybe_spawn_blessing_drop(self, position: Vec2) -> bool:
+        drop_rate = max(0.0, min(1.0, float(self.settings.blessing_drop_rate)))
+        if self._rng.random() >= drop_rate:
+            return False
+
+        blessing_id = random_blessing_id(self._rng)
+        if blessing_id is None:
+            return False
+
+        self.spawn_blessing(position=position, blessing_id=blessing_id)
+        return True
 
     def _apply_player_actions(self) -> None:
         for player_id, player in self.players.items():
@@ -353,9 +424,72 @@ class World:
                 ):
                     continue
 
-                player.coins += coin.value
-                self.total_coins_collected += coin.value
-                coin.alive = False
+                self._collect_coin_for_player(coin, player)
+                break
+
+    def _collect_coin_for_player(self, coin: Coin, collector: Player) -> None:
+        collector.coins += coin.value
+        self.total_coins_collected += coin.value
+        coin.alive = False
+        self.coin_vacuum_coin_ids.discard(coin.entity_id)
+
+    def _update_coin_vacuum(self, dt: float) -> None:
+        if not self.coin_vacuum_coin_ids:
+            self.coin_vacuum_target_player_id = None
+            return
+
+        if self.coin_vacuum_target_player_id is None:
+            self.coin_vacuum_coin_ids.clear()
+            return
+
+        collector = self.players.get(self.coin_vacuum_target_player_id)
+        if collector is None or not collector.alive:
+            self.coin_vacuum_coin_ids.clear()
+            self.coin_vacuum_target_player_id = None
+            return
+
+        pull_speed = max(1.0, float(self.settings.coin_vacuum_pull_speed))
+        for coin_id in list(self.coin_vacuum_coin_ids):
+            coin = self.coins.get(coin_id)
+            if coin is None or not coin.alive:
+                self.coin_vacuum_coin_ids.discard(coin_id)
+                continue
+
+            direction = collector.position - coin.position
+            distance = direction.length()
+            collect_distance = max(1.0, collector.coin_pickup_radius + coin.radius)
+            if distance <= collect_distance:
+                self._collect_coin_for_player(coin, collector)
+                continue
+
+            move_distance = pull_speed * dt
+            if move_distance >= distance:
+                coin.position = collector.position.copy()
+            else:
+                coin.position = coin.position + direction.normalized() * move_distance
+
+    def _collect_blessings(self) -> None:
+        for blessing in list(self.blessings.values()):
+            if not blessing.alive:
+                continue
+
+            for player in self.players.values():
+                if not player.alive:
+                    continue
+                if not circles_overlap(
+                    player.position,
+                    player.coin_pickup_radius,
+                    blessing.position,
+                    blessing.radius,
+                ):
+                    continue
+
+                self.blessing_system.apply_blessing(
+                    self,
+                    collector_player_id=player.player_id,
+                    blessing_id=blessing.blessing_id,
+                )
+                blessing.alive = False
                 break
 
     def _cleanup_dead_entities(self) -> None:
@@ -366,6 +500,14 @@ class World:
             if projectile.alive
         }
         self.coins = {coin_id: coin for coin_id, coin in self.coins.items() if coin.alive}
+        self.coin_vacuum_coin_ids.intersection_update(self.coins)
+        if not self.coin_vacuum_coin_ids:
+            self.coin_vacuum_target_player_id = None
+        self.blessings = {
+            blessing_id: blessing
+            for blessing_id, blessing in self.blessings.items()
+            if blessing.alive
+        }
 
     def _update_game_over_state(self) -> None:
         if not self.players:
@@ -416,6 +558,16 @@ class World:
             coin.position.y = max(
                 coin.radius,
                 min(coin.position.y, self.world_height - coin.radius),
+            )
+
+        for blessing in self.blessings.values():
+            blessing.position.x = max(
+                blessing.radius,
+                min(blessing.position.x, self.world_width - blessing.radius),
+            )
+            blessing.position.y = max(
+                blessing.radius,
+                min(blessing.position.y, self.world_height - blessing.radius),
             )
 
     def _allocate_entity_id(self) -> int:

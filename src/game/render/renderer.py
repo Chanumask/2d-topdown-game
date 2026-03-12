@@ -5,6 +5,7 @@ from pathlib import Path
 import pygame
 
 from game.core.snapshot import WorldSnapshot
+from game.render.blessings import BlessingSpriteLibrary
 from game.render.camera import Camera
 from game.render.characters import (
     ANIM_DEATH,
@@ -14,6 +15,7 @@ from game.render.characters import (
     AnimationClip,
     CharacterSpriteLibrary,
 )
+from game.render.effects import WorldEffectPlayer
 from game.render.enemies import EnemySpriteLibrary
 from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image
@@ -21,7 +23,7 @@ from game.render.tiles import AshlandGroundLayer
 from game.settings import GameSettings
 from game.ui.hud import BottomPlayerHUD, TopRunStatsHUD
 
-ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock1.png"
+ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock.png"
 COIN_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
 
 
@@ -57,6 +59,8 @@ class Renderer:
         self.local_player_id = local_player_id
         self.character_library = CharacterSpriteLibrary()
         self.enemy_library = EnemySpriteLibrary()
+        self.blessing_library = BlessingSpriteLibrary()
+        self.world_effect_player = WorldEffectPlayer()
         self.ground_layer = AshlandGroundLayer()
         self.player_animation_states: dict[str, PlayerAnimationState] = {}
         self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
@@ -69,6 +73,7 @@ class Renderer:
             character_library=self.character_library,
         )
         self.top_hud = TopRunStatsHUD(fonts=fonts)
+        self._last_snapshot_tick = -1
 
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
@@ -80,6 +85,10 @@ class Renderer:
         else:
             render_dt = max(0.0, min(0.1, render_now_seconds - self._last_render_time_seconds))
         self._last_render_time_seconds = render_now_seconds
+        if snapshot.tick < self._last_snapshot_tick:
+            self.world_effect_player.clear()
+        self._last_snapshot_tick = snapshot.tick
+        self.world_effect_player.consume_events(snapshot.vfx_events)
 
         focus_player = next(
             (
@@ -98,9 +107,11 @@ class Renderer:
         if not self._draw_ground_layer(snapshot):
             self._draw_grid()
         self._draw_coins(snapshot)
+        self._draw_blessings(snapshot)
         self._draw_enemies(snapshot, render_dt)
         self._draw_projectiles(snapshot)
         self._draw_players(snapshot, render_dt)
+        self._draw_world_effects(render_dt)
         self.top_hud.render(self.screen, snapshot)
         self.bottom_hud.render(self.screen, snapshot)
 
@@ -355,6 +366,16 @@ class Renderer:
             radius = round(float(coin.get("radius", self.settings.coin_radius)))
             pygame.draw.circle(self.screen, self.settings.coin_color, center, radius)
 
+    def _draw_blessings(self, snapshot: WorldSnapshot) -> None:
+        for blessing in snapshot.blessings:
+            if not isinstance(blessing, dict):
+                continue
+            center = self.camera.world_to_screen(self._read_position(blessing))
+            if self._draw_blessing_sprite(blessing, center):
+                continue
+            radius = round(float(blessing.get("radius", 9.0)))
+            self._draw_blessing_fallback(center, radius)
+
     def _draw_rock_projectile(
         self,
         projectile: dict[str, object],
@@ -393,6 +414,34 @@ class Renderer:
         sprite_rect = sprite.get_rect(center=center)
         self.screen.blit(sprite, sprite_rect)
         return True
+
+    def _draw_blessing_sprite(
+        self,
+        blessing: dict[str, object],
+        center: tuple[int, int],
+    ) -> bool:
+        blessing_id = str(blessing.get("blessing_id", ""))
+        if not blessing_id:
+            return False
+
+        sprite = self.blessing_library.get_icon(blessing_id)
+        if sprite is None:
+            return False
+
+        sprite_rect = sprite.get_rect(center=center)
+        self.screen.blit(sprite, sprite_rect)
+        return True
+
+    def _draw_world_effects(self, render_dt: float) -> None:
+        self.world_effect_player.update_and_draw(
+            self.screen,
+            self.camera,
+            render_dt,
+        )
+
+    def _draw_blessing_fallback(self, center: tuple[int, int], radius: int) -> None:
+        pygame.draw.circle(self.screen, (136, 214, 255), center, radius)
+        pygame.draw.circle(self.screen, (44, 100, 138), center, radius, width=2)
 
     @staticmethod
     def _read_position(payload: dict[str, object]) -> tuple[float, float]:

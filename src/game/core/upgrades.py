@@ -86,7 +86,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
     "magnet": UpgradeDefinition(
         upgrade_id="magnet",
         display_name="Magnet",
-        description="Increase coin pickup radius.",
+        description="Increase coin and Blessing pickup range.",
         base_cost=70,
         cost_scaling=1.40,
         max_level=10,
@@ -100,7 +100,7 @@ UPGRADE_RUNTIME_LABELS: dict[str, str] = {
     "quick_boots": "Move Speed",
     "fast_hands": "Throw Cooldown",
     "high_velocity_ammo": "Projectile Speed",
-    "magnet": "Pickup Range",
+    "magnet": "Pickup Range (Coins + Blessings)",
 }
 
 
