@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pygame
 
 from game.render.camera import Camera
-from game.render.fixed_map import load_active_map
+from game.render.fixed_map import DEFAULT_MAP_ID, load_active_map
 from game.render.map_loader import CoordGrid, GridCoord, MapDefinition
 
 
@@ -20,8 +20,13 @@ class LayerRenderCache:
 class AshlandGroundLayer:
     """Renders preloaded external map layers in deterministic order."""
 
-    def __init__(self, map_definition: MapDefinition | None = None) -> None:
-        self.fixed_map = map_definition or load_active_map()
+    def __init__(
+        self,
+        map_definition: MapDefinition | None = None,
+        *,
+        map_id: str = DEFAULT_MAP_ID,
+    ) -> None:
+        self.fixed_map = map_definition or load_active_map(map_id)
         self.render_tile_size = self.fixed_map.tile_size
         self._layer_caches: tuple[LayerRenderCache, ...] = tuple(
             LayerRenderCache(

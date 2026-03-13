@@ -5,6 +5,14 @@ import pygame
 from game.audio.audio_manager import AudioManager
 from game.core.app_state import AppScreen, AppState
 from game.core.gameloop import GameLoop
+from game.core.lobby import (
+    CharacterOption,
+    MapOption,
+    cycle_selected_id,
+    list_character_options,
+    list_map_options,
+    resolve_selected_id,
+)
 from game.core.profile_store import ProfileStore
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase
@@ -20,6 +28,7 @@ from game.render.renderer import Renderer
 from game.settings import SETTINGS
 from game.ui import (
     GameOverScreen,
+    LobbyScreen,
     MainMenuScreen,
     PauseMenuScreen,
     SettingsScreen,
@@ -30,6 +39,7 @@ from game.ui.widgets import draw_centered_text
 MENU_MUSIC_SCREENS = frozenset(
     {
         AppScreen.MAIN_MENU,
+        AppScreen.LOBBY,
         AppScreen.SHOP,
         AppScreen.SETTINGS,
         AppScreen.GAME_OVER,
@@ -58,10 +68,23 @@ class GameApp:
         self.menu_input = MenuInputHandler()
 
         self.main_menu = MainMenuScreen()
+        self.lobby_menu = LobbyScreen()
         self.shop_menu = ShopScreen()
         self.settings_menu = SettingsScreen()
         self.pause_menu = PauseMenuScreen()
         self.game_over_menu = GameOverScreen()
+        self.character_options: list[CharacterOption] = list_character_options()
+        self.map_options: list[MapOption] = list_map_options()
+        self.app_state.selected_character_id = resolve_selected_id(
+            self.character_options,
+            SETTINGS.default_player_character_id,
+            id_getter=lambda option: option.character_id,
+        )
+        self.app_state.selected_map_id = resolve_selected_id(
+            self.map_options,
+            "ashland_map",
+            id_getter=lambda option: option.map_id,
+        )
 
         self.camera = Camera(
             screen_width=self.screen.get_width(),
@@ -96,6 +119,7 @@ class GameApp:
 
             if self.app_state.current_screen in (
                 AppScreen.MAIN_MENU,
+                AppScreen.LOBBY,
                 AppScreen.SHOP,
                 AppScreen.SETTINGS,
             ):
@@ -128,7 +152,7 @@ class GameApp:
                 or (menu_actions.mouse_left_click and self.main_menu.hover_index is not None),
             )
             if command == "start_run":
-                self._start_new_run()
+                self.app_state.current_screen = AppScreen.LOBBY
             elif command == "open_shop":
                 self.app_state.current_screen = AppScreen.SHOP
             elif command == "open_settings":
@@ -136,6 +160,38 @@ class GameApp:
             elif command == "quit":
                 self._save_profile()
                 self.app_state.running = False
+
+        elif self.app_state.current_screen is AppScreen.LOBBY:
+            previous_index = self.lobby_menu.selected_index
+            command = self.lobby_menu.handle_input(
+                menu_actions,
+                self.screen,
+                self.body_font,
+                selected_character_name=self._selected_character_name(),
+                selected_map_name=self._selected_map_name(),
+            )
+            self._play_menu_audio_feedback(
+                previous_index=previous_index,
+                current_index=self.lobby_menu.selected_index,
+                selected_or_clicked=(
+                    menu_actions.select
+                    or menu_actions.mouse_left_click
+                    or menu_actions.navigate_left
+                    or menu_actions.navigate_right
+                ),
+            )
+            if command == "character_prev":
+                self._cycle_lobby_character(step=-1)
+            elif command == "character_next":
+                self._cycle_lobby_character(step=1)
+            elif command == "map_prev":
+                self._cycle_lobby_map(step=-1)
+            elif command == "map_next":
+                self._cycle_lobby_map(step=1)
+            elif command == "start_run":
+                self._start_new_run()
+            elif command == "back_main_menu":
+                self.app_state.current_screen = AppScreen.MAIN_MENU
 
         elif self.app_state.current_screen is AppScreen.SHOP:
             previous_index = self.shop_menu.selected_index
@@ -274,6 +330,16 @@ class GameApp:
 
         if self.app_state.current_screen is AppScreen.MAIN_MENU:
             self.main_menu.render(self.screen, self.title_font, self.body_font)
+        elif self.app_state.current_screen is AppScreen.LOBBY:
+            self.lobby_menu.render(
+                self.screen,
+                self.title_font,
+                self.body_font,
+                selected_character_name=self._selected_character_name(),
+                selected_map_name=self._selected_map_name(),
+                character_count=len(self.character_options),
+                map_count=len(self.map_options),
+            )
         elif self.app_state.current_screen is AppScreen.SHOP:
             self.shop_menu.render(self.screen, self.profile, self.title_font, self.body_font)
         elif self.app_state.current_screen is AppScreen.SETTINGS:
@@ -350,6 +416,36 @@ class GameApp:
             )
 
     def _start_new_run(self) -> None:
+        selected_character_id = resolve_selected_id(
+            self.character_options,
+            self.app_state.selected_character_id,
+            id_getter=lambda option: option.character_id,
+        )
+        if selected_character_id:
+            self.app_state.selected_character_id = selected_character_id
+        else:
+            selected_character_id = SETTINGS.default_player_character_id
+
+        selected_map_id = resolve_selected_id(
+            self.map_options,
+            self.app_state.selected_map_id,
+            id_getter=lambda option: option.map_id,
+        )
+        if selected_map_id:
+            self.app_state.selected_map_id = selected_map_id
+            try:
+                self.renderer.set_active_map(selected_map_id)
+            except Exception as error:
+                print(f"[Lobby] Failed to load map '{selected_map_id}': {error}")
+                fallback_map_id = (
+                    self.map_options[0].map_id
+                    if self.map_options
+                    else self.app_state.selected_map_id
+                )
+                if fallback_map_id:
+                    self.app_state.selected_map_id = fallback_map_id
+                    self.renderer.set_active_map(fallback_map_id)
+
         run_modifiers = build_run_modifiers(self.profile.upgrades)
         fixed_map = self.renderer.ground_layer.fixed_map
         map_world_width = float(fixed_map.cols * fixed_map.tile_size)
@@ -374,7 +470,7 @@ class GameApp:
         )
         self.world.add_player(
             self.local_player_id,
-            character_id=SETTINGS.default_player_character_id,
+            character_id=selected_character_id,
         )
         self.camera.set_world_bounds(run_world_width, run_world_height)
 
@@ -483,6 +579,36 @@ class GameApp:
         if player is None:
             return -1, 0
         return player.last_attack_tick, player.coins
+
+    def _selected_character_name(self) -> str:
+        selected_id = self.app_state.selected_character_id
+        for option in self.character_options:
+            if option.character_id == selected_id:
+                return option.display_name
+        return "None"
+
+    def _selected_map_name(self) -> str:
+        selected_id = self.app_state.selected_map_id
+        for option in self.map_options:
+            if option.map_id == selected_id:
+                return option.display_name
+        return "None"
+
+    def _cycle_lobby_character(self, *, step: int) -> None:
+        self.app_state.selected_character_id = cycle_selected_id(
+            self.character_options,
+            self.app_state.selected_character_id,
+            id_getter=lambda option: option.character_id,
+            step=step,
+        )
+
+    def _cycle_lobby_map(self, *, step: int) -> None:
+        self.app_state.selected_map_id = cycle_selected_id(
+            self.map_options,
+            self.app_state.selected_map_id,
+            id_getter=lambda option: option.map_id,
+            step=step,
+        )
 
     def _prepare_gameplay_actions(
         self,

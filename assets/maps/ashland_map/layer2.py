@@ -1,5 +1,5 @@
 LAYER_NAME = 'active_layer2'
-LAYER_ORDER = 0
+LAYER_ORDER = 1
 TILESET_PATH = 'tilesets/ashland/tf_A1_ashlands_2.png'
 TILE_SIZE = 16
 MAP_WIDTH = 50

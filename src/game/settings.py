@@ -39,9 +39,14 @@ class GameSettings:
     damage_aura_tick_interval_seconds: float = 0.5
     damage_aura_damage_per_tick: int = 10
 
-    spawn_base_interval_seconds: float = 1.8
+    spawn_base_interval_seconds: float = 2
     spawn_min_interval_seconds: float = 0.45
-    spawn_acceleration_per_second: float = 0.015
+    spawn_acceleration_per_second: float = 0.005
+    enemy_nav_repath_interval_seconds: float = 0.45
+    enemy_nav_max_path_requests_per_tick: int = 6
+    enemy_nav_max_search_nodes: int = 2048
+    enemy_nav_stuck_seconds: float = 0.5
+    enemy_nav_min_progress_per_second: float = 12.0
 
     background_color: tuple[int, int, int] = (18, 22, 26)
     grid_color: tuple[int, int, int] = (30, 36, 42)

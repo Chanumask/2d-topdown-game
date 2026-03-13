@@ -13,7 +13,7 @@ from game.entities import Blessing, Coin, Enemy, Player, Projectile, Vec2
 from game.input.actions import PlayerActions
 from game.input.session_actions import SessionActions
 from game.settings import GameSettings
-from game.systems import BlessingSystem, CombatSystem, EnemySpawner
+from game.systems import BlessingSystem, CombatSystem, EnemyNavigationSystem, EnemySpawner
 from game.systems.collision import circles_overlap, nearest_player
 
 
@@ -48,6 +48,7 @@ class World:
     session: SessionState = field(default_factory=SessionState)
     spawner: EnemySpawner = field(init=False)
     combat: CombatSystem = field(init=False)
+    navigation: EnemyNavigationSystem = field(init=False)
     blessing_system: BlessingSystem = field(init=False)
     _rng: random.Random = field(init=False, repr=False)
     _next_entity_id: int = field(init=False, repr=False)
@@ -71,6 +72,13 @@ class World:
             acceleration_per_second=self.settings.spawn_acceleration_per_second,
         )
         self.blessing_system = BlessingSystem()
+        self.navigation = EnemyNavigationSystem(
+            repath_interval_seconds=self.settings.enemy_nav_repath_interval_seconds,
+            max_path_requests_per_tick=self.settings.enemy_nav_max_path_requests_per_tick,
+            max_search_nodes=self.settings.enemy_nav_max_search_nodes,
+            stuck_seconds=self.settings.enemy_nav_stuck_seconds,
+            min_progress_per_second=self.settings.enemy_nav_min_progress_per_second,
+        )
         self.combat = CombatSystem(
             projectile_speed=max(
                 1.0,
@@ -423,19 +431,26 @@ class World:
             self.session.start_resume_countdown()
 
     def _update_enemy_ai(self, dt: float) -> None:
+        self.navigation.begin_tick()
+        alive_enemy_ids: set[int] = set()
         for enemy in self.enemies.values():
             if not enemy.alive:
                 continue
+            alive_enemy_ids.add(enemy.entity_id)
 
             target_player = nearest_player(enemy.position, self.players)
-            if target_player is None:
-                enemy.velocity = Vec2(0.0, 0.0)
-            else:
-                enemy.chase(target_player.position)
+            enemy.velocity = self.navigation.choose_velocity(
+                enemy=enemy,
+                target_position=target_player.position if target_player is not None else None,
+                dt=dt,
+                blocking_grid=self.blocking_grid,
+                tile_size=self.blocking_tile_size,
+            )
 
             previous_position = enemy.position.copy()
             enemy.update(dt, self.world_width, self.world_height)
             self._resolve_blocking_for_entity(enemy, previous_position)
+        self.navigation.prune(alive_enemy_ids)
 
     def _collect_coins(self) -> None:
         for coin in self.coins.values():

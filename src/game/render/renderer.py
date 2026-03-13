@@ -86,6 +86,11 @@ class Renderer:
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
 
+    def set_active_map(self, map_id: str) -> None:
+        self.ground_layer = AshlandGroundLayer(map_id=map_id)
+        self.world_effect_player.clear()
+        self.damage_aura_animation_states.clear()
+
     def render(self, snapshot: WorldSnapshot) -> None:
         render_now_seconds = pygame.time.get_ticks() / 1000.0
         if self._last_render_time_seconds is None:

@@ -14,9 +14,9 @@ DEFAULT_MAPS_FOLDER = DEFAULT_MAPS_ROOT
 DEFAULT_LAYER_RENDER_SIZE = DEFAULT_RENDER_TILE_SIZE
 
 
-def load_active_map() -> MapDefinition:
+def load_active_map(map_id: str = DEFAULT_MAP_ID) -> MapDefinition:
     return load_map(
-        DEFAULT_MAP_ID,
+        map_id,
         maps_root=DEFAULT_MAPS_FOLDER,
         render_tile_size=DEFAULT_LAYER_RENDER_SIZE,
         project_root=PROJECT_ROOT,

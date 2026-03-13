@@ -1,28 +1,28 @@
 {
   "profile": {
     "last_run_coins": 10,
-    "last_run_enemies_killed": 11,
+    "last_run_enemies_killed": 16,
     "last_run_result": {
       "coins_by_player": {
         "player-1": 10
       },
       "enemies_killed_by_player": {
-        "player-1": 11
+        "player-1": 16
       },
-      "enemies_killed_total": 11,
+      "enemies_killed_total": 16,
       "players": [
         "player-1"
       ],
-      "simulation_time": 83.58333333332988,
-      "survival_time_seconds": 83.58333333332988,
-      "tick": 5015,
+      "simulation_time": 148.0166666666766,
+      "survival_time_seconds": 148.0166666666766,
+      "tick": 8881,
       "total_run_coins": 10
     },
-    "last_run_survival_time_seconds": 83.58333333332988,
-    "lifetime_enemies_killed": 278,
-    "lifetime_meta_earned": 158,
-    "lifetime_runs_completed": 19,
-    "meta_currency": 79,
+    "last_run_survival_time_seconds": 148.0166666666766,
+    "lifetime_enemies_killed": 311,
+    "lifetime_meta_earned": 182,
+    "lifetime_runs_completed": 21,
+    "meta_currency": 103,
     "profile_id": "local-profile",
     "settings": {
       "fullscreen": true,

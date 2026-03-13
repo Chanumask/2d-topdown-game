@@ -4,6 +4,7 @@ from enum import StrEnum
 
 class AppScreen(StrEnum):
     MAIN_MENU = "main_menu"
+    LOBBY = "lobby"
     SHOP = "shop"
     SETTINGS = "settings"
     IN_RUN = "in_run"
@@ -17,6 +18,8 @@ class AppScreen(StrEnum):
 class AppState:
     current_screen: AppScreen = AppScreen.MAIN_MENU
     settings_return_screen: AppScreen = AppScreen.MAIN_MENU
+    selected_character_id: str = ""
+    selected_map_id: str = ""
     current_run_banked: bool = False
     running: bool = True
 
