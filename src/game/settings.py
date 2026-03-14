@@ -19,11 +19,6 @@ class GameSettings:
     player_touch_iframe_seconds: float = 0.4
     throw_cooldown_seconds: float = 1.0
 
-    enemy_radius: float = 12.0
-    enemy_base_speed: float = 72.0
-    enemy_base_health: int = 30
-    enemy_touch_damage: int = 10
-
     projectile_radius: float = 4.0
     projectile_speed: float = 400.0
     projectile_damage: int = 15

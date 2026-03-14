@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass, field
 
 from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
+from game.core.enemies import EnemySpawnRequest
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase, SessionState
 from game.core.snapshot import WorldSnapshot
@@ -13,7 +14,13 @@ from game.entities import Blessing, Coin, Enemy, Player, Projectile, Vec2
 from game.input.actions import PlayerActions
 from game.input.session_actions import SessionActions
 from game.settings import GameSettings
-from game.systems import BlessingSystem, CombatSystem, EnemyNavigationSystem, EnemySpawner
+from game.systems import (
+    BlessingSystem,
+    CombatSystem,
+    EnemyDirector,
+    EnemyNavigationSystem,
+    EnemySpawner,
+)
 from game.systems.collision import circles_overlap, nearest_player
 
 
@@ -48,6 +55,7 @@ class World:
     session: SessionState = field(default_factory=SessionState)
     spawner: EnemySpawner = field(init=False)
     combat: CombatSystem = field(init=False)
+    enemy_director: EnemyDirector = field(init=False)
     navigation: EnemyNavigationSystem = field(init=False)
     blessing_system: BlessingSystem = field(init=False)
     _rng: random.Random = field(init=False, repr=False)
@@ -71,6 +79,7 @@ class World:
             min_interval_seconds=self.settings.spawn_min_interval_seconds,
             acceleration_per_second=self.settings.spawn_acceleration_per_second,
         )
+        self.enemy_director = EnemyDirector(rng=self._rng)
         self.blessing_system = BlessingSystem()
         self.navigation = EnemyNavigationSystem(
             repath_interval_seconds=self.settings.enemy_nav_repath_interval_seconds,
@@ -176,6 +185,7 @@ class World:
             player.update(dt, self.world_width, self.world_height)
             self._resolve_blocking_for_entity(player, previous_position)
 
+        self.enemy_director.update(self, dt)
         self.spawner.update(self, dt)
         self._update_enemy_ai(dt)
 
@@ -200,7 +210,10 @@ class World:
 
     @property
     def current_spawn_interval(self) -> float:
-        return self.spawner.current_interval(self.simulation_time)
+        return self.spawner.current_interval(
+            self.simulation_time,
+            interval_multiplier=self.enemy_director.current_spawn_interval_multiplier(self),
+        )
 
     def snapshot(self) -> WorldSnapshot:
         players = [self.players[player_id].to_dict() for player_id in sorted(self.players)]
@@ -283,19 +296,32 @@ class World:
             self.final_run_result = self.build_run_result()
         return self.final_run_result
 
-    def spawn_enemy(self, position: Vec2, health: int, speed: float, touch_damage: int) -> None:
-        spawn_position = self._nearest_walkable_position(position, self.settings.enemy_radius)
+    def spawn_enemy(self, position: Vec2, profile_id: str | None = None) -> None:
+        spawn_request: EnemySpawnRequest = self.enemy_director.build_spawn_request(
+            self,
+            profile_id=profile_id,
+        )
+        spawn_position = self._nearest_walkable_position(position, spawn_request.stats.radius)
         enemy = Enemy(
             entity_id=self._allocate_entity_id(),
             position=spawn_position,
-            radius=self.settings.enemy_radius,
-            speed=speed,
-            max_health=health,
-            health=health,
-            touch_damage=touch_damage,
-            coin_drop_value=self.settings.coin_value,
+            radius=spawn_request.stats.radius,
+            profile_id=spawn_request.profile_id,
+            tier=spawn_request.tier.value,
+            tags=spawn_request.tags,
+            base_radius=spawn_request.stats.radius,
+            base_speed=spawn_request.stats.speed,
+            base_max_health=spawn_request.stats.max_health,
+            base_touch_damage=spawn_request.stats.touch_damage,
+            base_coin_drop_value=spawn_request.stats.coin_drop_value,
+            speed=spawn_request.stats.speed,
+            max_health=spawn_request.stats.max_health,
+            health=spawn_request.stats.max_health,
+            touch_damage=spawn_request.stats.touch_damage,
+            coin_drop_value=spawn_request.stats.coin_drop_value,
         )
         self.enemies[enemy.entity_id] = enemy
+        self.enemy_director.on_enemy_spawn(self, enemy)
 
     def spawn_projectile(
         self,
@@ -368,6 +394,7 @@ class World:
     def defeat_enemy(self, enemy: Enemy, killer_player_id: str | None) -> None:
         self.register_enemy_kill(killer_player_id)
         self._drop_enemy_reward(position=enemy.position.copy(), coin_value=enemy.coin_drop_value)
+        self.enemy_director.on_enemy_death(self, enemy)
         enemy.health = 0
         enemy.alive = False
 

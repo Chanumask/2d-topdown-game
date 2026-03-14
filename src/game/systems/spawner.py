@@ -25,31 +25,27 @@ class EnemySpawner:
 
     def update(self, world: World, dt: float) -> None:
         self.timer -= dt
-        spawn_interval = self.current_interval(world.simulation_time)
+        spawn_interval = self.current_interval(
+            world.simulation_time,
+            interval_multiplier=world.enemy_director.current_spawn_interval_multiplier(world),
+        )
 
         while self.timer <= 0.0:
-            self._spawn_enemy(world)
+            spawn_count = 1 + world.enemy_director.current_spawn_batch_bonus(world)
+            for _ in range(max(1, spawn_count)):
+                self._spawn_enemy(world)
             self.timer += spawn_interval
 
-    def current_interval(self, elapsed_seconds: float) -> float:
-        return max(
+    def current_interval(self, elapsed_seconds: float, interval_multiplier: float = 1.0) -> float:
+        base_interval = max(
             self.min_interval_seconds,
             self.base_interval_seconds - (elapsed_seconds * self.acceleration_per_second),
         )
+        return max(self.min_interval_seconds * 0.25, base_interval * max(0.1, interval_multiplier))
 
     def _spawn_enemy(self, world: World) -> None:
         spawn_position = self._random_edge_position(world.world_width, world.world_height)
-
-        elapsed = world.simulation_time
-        health_bonus = int(elapsed // 25.0) * 4
-        speed_bonus = (elapsed // 18.0) * 3.0
-
-        world.spawn_enemy(
-            position=spawn_position,
-            health=world.settings.enemy_base_health + health_bonus,
-            speed=world.settings.enemy_base_speed + speed_bonus,
-            touch_damage=world.settings.enemy_touch_damage,
-        )
+        world.spawn_enemy(position=spawn_position)
 
     def _random_edge_position(self, world_width: float, world_height: float) -> Vec2:
         edge = self.rng.choice(("top", "bottom", "left", "right"))

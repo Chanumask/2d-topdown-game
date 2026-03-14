@@ -62,6 +62,20 @@ class EnemySpriteLibrary:
             return None
         return self.get_animation_clip(enemy_id, ANIM_IDLE)
 
+    def get_idle_clip(
+        self,
+        *,
+        profile_id: str | None = None,
+        entity_id: int = -1,
+    ) -> AnimationClip | None:
+        if profile_id:
+            clip = self.get_animation_clip(profile_id, ANIM_IDLE)
+            if clip is not None:
+                return clip
+        if entity_id >= 0:
+            return self.get_idle_clip_for_entity(entity_id)
+        return None
+
     @property
     def loaded_enemy_count(self) -> int:
         return len(self._ordered_enemy_ids)

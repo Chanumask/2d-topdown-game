@@ -5,6 +5,7 @@ from pathlib import Path
 import pygame
 
 from game.core.blessings import BLESSING_DAMAGE_AURA, BLESSING_VFX_DAMAGE_AURA
+from game.core.enemy_catalog import get_fallback_enemy_radius
 from game.core.snapshot import WorldSnapshot
 from game.render.blessings import BlessingSpriteLibrary
 from game.render.camera import Camera
@@ -26,6 +27,7 @@ from game.ui.hud import BottomPlayerHUD, TopRunStatsHUD
 
 ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock.png"
 COIN_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
+FALLBACK_ENEMY_RADIUS = get_fallback_enemy_radius()
 
 
 @dataclass(slots=True)
@@ -318,9 +320,16 @@ class Renderer:
                 active_enemy_ids.add(enemy_id)
 
             center = self.camera.world_to_screen(self._read_position(enemy))
-            clip = self.enemy_library.get_idle_clip_for_entity(enemy_id)
+            clip = self.enemy_library.get_idle_clip(
+                profile_id=(
+                    str(enemy.get("profile_id"))
+                    if enemy.get("profile_id") not in (None, "")
+                    else None
+                ),
+                entity_id=enemy_id,
+            )
             if clip is None or not clip.frames:
-                radius = round(float(enemy.get("radius", self.settings.enemy_radius)))
+                radius = round(float(enemy.get("radius", FALLBACK_ENEMY_RADIUS)))
                 pygame.draw.circle(self.screen, self.settings.enemy_color, center, radius)
                 continue
 
