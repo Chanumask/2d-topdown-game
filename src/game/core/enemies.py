@@ -36,6 +36,11 @@ class EnemyAbilityDefinition:
     ability_id: str
     display_name: str
     description: str = ""
+    trigger_on_player_touch: bool = False
+    arming_delay_seconds: float = 0.0
+    explosion_damage: int = 0
+    explosion_radius: float = 0.0
+    loop_effect_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +111,10 @@ class EnemySpawnRequest:
     tier: EnemyTier
     stats: EnemyStats
     tags: tuple[str, ...]
+
+
+ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH = "delayed_explosion_on_touch"
+ENEMY_VFX_FLOATING_EYE_PURPLE = "floating_eye_primed_purple"
 
 
 def combine_enemy_stat_modifiers(

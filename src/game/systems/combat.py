@@ -73,7 +73,10 @@ class CombatSystem:
                 projectile.alive = False
 
                 if not enemy.alive:
-                    world.defeat_enemy(enemy, killer_player_id=projectile.owner_player_id or None)
+                    world.resolve_enemy_damage_defeat(
+                        enemy,
+                        killer_player_id=projectile.owner_player_id or None,
+                    )
                 break
 
     def _enemy_contacts_player(self, world: World) -> None:
@@ -89,6 +92,8 @@ class CombatSystem:
                 ):
                     continue
 
+                if world.handle_enemy_player_contact(enemy, player):
+                    continue
                 player.take_damage(enemy.touch_damage)
 
     @staticmethod

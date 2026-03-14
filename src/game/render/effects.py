@@ -11,6 +11,7 @@ from game.core.blessings import (
     BLESSING_VFX_ENEMY_CLEAR,
     BLESSING_VFX_FULL_HEAL,
 )
+from game.core.enemies import ENEMY_VFX_FLOATING_EYE_PURPLE
 from game.render.spritesheet import load_image, pixelart_upscale_surface
 
 if TYPE_CHECKING:
@@ -20,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_EFFECT_FRAME_SIZE = 16
 # Keep blessing VFX timing feel consistent with the previous 6-frame @ 14 FPS setup.
 _BLESSING_VFX_TARGET_DURATION_SECONDS = 6.0 / 14.0
+_FLOATING_EYE_PRIME_DURATION_SECONDS = _BLESSING_VFX_TARGET_DURATION_SECONDS * 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,10 @@ EFFECT_SHEET_CATALOG: dict[str, EffectSheetDefinition] = {
         sheet_key="blue_sheet",
         image_path="assets/effects/blue_effectsheet.png",
     ),
+    "purple_sheet": EffectSheetDefinition(
+        sheet_key="purple_sheet",
+        image_path="assets/effects/purple_effectsheet.png",
+    ),
 }
 
 # Frame coordinates use a 16x16 grid, with (0, 0) at the top-left tile.
@@ -105,6 +111,14 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         frame_sequence=((28, 8), (27, 8), (26, 8), (25, 8), (24, 8)),
         fps=5.0 / _BLESSING_VFX_TARGET_DURATION_SECONDS,
         scale_multiple=9,
+        loop=True,
+    ),
+    ENEMY_VFX_FLOATING_EYE_PURPLE: EffectDefinition(
+        effect_id=ENEMY_VFX_FLOATING_EYE_PURPLE,
+        sheet_key="purple_sheet",
+        frame_sequence=((28, 8), (27, 8), (26, 8), (25, 8), (24, 8)),
+        fps=5.0 / _FLOATING_EYE_PRIME_DURATION_SECONDS,
+        scale_multiple=6,
         loop=True,
     ),
 }

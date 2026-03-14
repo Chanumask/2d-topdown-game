@@ -74,6 +74,7 @@ class Renderer:
         self.player_animation_states: dict[str, PlayerAnimationState] = {}
         self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
         self.damage_aura_animation_states: dict[str, TimedBlessingAnimationState] = {}
+        self.enemy_effect_animation_states: dict[tuple[int, str], TimedBlessingAnimationState] = {}
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
         self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
@@ -92,6 +93,7 @@ class Renderer:
         self.ground_layer = AshlandGroundLayer(map_id=map_id)
         self.world_effect_player.clear()
         self.damage_aura_animation_states.clear()
+        self.enemy_effect_animation_states.clear()
 
     def render(self, snapshot: WorldSnapshot) -> None:
         render_now_seconds = pygame.time.get_ticks() / 1000.0
@@ -102,6 +104,7 @@ class Renderer:
         self._last_render_time_seconds = render_now_seconds
         if snapshot.tick < self._last_snapshot_tick:
             self.world_effect_player.clear()
+            self.enemy_effect_animation_states.clear()
         self._last_snapshot_tick = snapshot.tick
         self.world_effect_player.consume_events(snapshot.vfx_events)
 
@@ -311,6 +314,7 @@ class Renderer:
 
     def _draw_enemies(self, snapshot: WorldSnapshot, render_dt: float) -> None:
         active_enemy_ids: set[int] = set()
+        active_enemy_effect_keys: set[tuple[int, str]] = set()
         for enemy in snapshot.enemies:
             if not isinstance(enemy, dict):
                 continue
@@ -339,10 +343,44 @@ class Renderer:
             sprite_rect = current_frame.get_rect(center=center)
             self.screen.blit(current_frame, sprite_rect)
 
+            active_effect_id = (
+                str(enemy.get("active_ability_vfx_id"))
+                if enemy.get("active_ability_vfx_id") not in (None, "")
+                else None
+            )
+            if active_effect_id is None:
+                continue
+
+            effect_clip = self.world_effect_player.library.get_clip(active_effect_id)
+            if effect_clip is None or not effect_clip.frames:
+                continue
+
+            effect_key = (enemy_id, active_effect_id)
+            active_enemy_effect_keys.add(effect_key)
+            effect_state = self.enemy_effect_animation_states.setdefault(
+                effect_key,
+                TimedBlessingAnimationState(),
+            )
+            self._advance_looping_animation(
+                effect_state,
+                fps=float(effect_clip.fps),
+                frame_count=len(effect_clip.frames),
+                render_dt=render_dt,
+            )
+
+            effect_frame = effect_clip.frames[effect_state.frame_index]
+            effect_rect = effect_frame.get_rect(center=center)
+            self.screen.blit(effect_frame, effect_rect)
+
         self.enemy_animation_states = {
             enemy_id: state
             for enemy_id, state in self.enemy_animation_states.items()
             if enemy_id in active_enemy_ids
+        }
+        self.enemy_effect_animation_states = {
+            effect_key: state
+            for effect_key, state in self.enemy_effect_animation_states.items()
+            if effect_key in active_enemy_effect_keys
         }
 
     def _draw_projectiles(self, snapshot: WorldSnapshot) -> None:

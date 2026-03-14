@@ -10,6 +10,9 @@ class Enemy(Entity):
     profile_id: str = CRIMSON_IMP_PROFILE_ID
     tier: str = EnemyTier.NORMAL.value
     tags: tuple[str, ...] = ()
+    active_ability_id: str | None = None
+    active_ability_vfx_id: str | None = None
+    ability_timer_seconds: float = 0.0
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     base_radius: float = 12.0
     base_speed: float = 70.0
@@ -40,6 +43,23 @@ class Enemy(Entity):
         if self.health <= 0:
             self.alive = False
 
+    def arm_ability(
+        self,
+        ability_id: str,
+        *,
+        timer_seconds: float,
+        vfx_effect_id: str | None,
+    ) -> None:
+        self.active_ability_id = ability_id
+        self.active_ability_vfx_id = vfx_effect_id
+        self.ability_timer_seconds = max(0.0, float(timer_seconds))
+        self.velocity = Vec2(0.0, 0.0)
+
+    def clear_ability_state(self) -> None:
+        self.active_ability_id = None
+        self.active_ability_vfx_id = None
+        self.ability_timer_seconds = 0.0
+
     def base_stats(self) -> EnemyStats:
         return EnemyStats(
             max_health=self.base_max_health,
@@ -68,6 +88,9 @@ class Enemy(Entity):
                 "profile_id": self.profile_id,
                 "tier": self.tier,
                 "tags": list(self.tags),
+                "active_ability_id": self.active_ability_id,
+                "active_ability_vfx_id": self.active_ability_vfx_id,
+                "ability_timer_seconds": float(self.ability_timer_seconds),
                 "velocity": self.velocity.to_dict(),
                 "base_radius": float(self.base_radius),
                 "base_speed": float(self.base_speed),
@@ -93,6 +116,17 @@ class Enemy(Entity):
             profile_id=str(payload.get("profile_id", CRIMSON_IMP_PROFILE_ID)),
             tier=str(payload.get("tier", EnemyTier.NORMAL.value)),
             tags=tuple(str(tag) for tag in payload.get("tags", [])),
+            active_ability_id=(
+                str(payload.get("active_ability_id"))
+                if payload.get("active_ability_id") not in (None, "")
+                else None
+            ),
+            active_ability_vfx_id=(
+                str(payload.get("active_ability_vfx_id"))
+                if payload.get("active_ability_vfx_id") not in (None, "")
+                else None
+            ),
+            ability_timer_seconds=float(payload.get("ability_timer_seconds", 0.0)),
             velocity=vec2_from_payload(payload, "velocity"),
             base_radius=float(payload.get("base_radius", payload.get("radius", 12.0))),
             base_speed=float(payload.get("base_speed", payload.get("speed", 70.0))),

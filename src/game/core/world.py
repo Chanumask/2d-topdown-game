@@ -5,7 +5,12 @@ import random
 from dataclasses import dataclass, field
 
 from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
-from game.core.enemies import EnemySpawnRequest
+from game.core.enemies import (
+    ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
+    EnemyAbilityDefinition,
+    EnemySpawnRequest,
+)
+from game.core.enemy_catalog import get_enemy_profile
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase, SessionState
 from game.core.snapshot import WorldSnapshot
@@ -191,6 +196,7 @@ class World:
 
         self.combat.update_projectiles(self, dt)
         self.combat.resolve(self)
+        self._update_enemy_abilities(dt)
         self._update_coin_vacuum(dt)
         self._update_damage_auras(dt)
 
@@ -395,6 +401,7 @@ class World:
         self.register_enemy_kill(killer_player_id)
         self._drop_enemy_reward(position=enemy.position.copy(), coin_value=enemy.coin_drop_value)
         self.enemy_director.on_enemy_death(self, enemy)
+        enemy.clear_ability_state()
         enemy.health = 0
         enemy.alive = False
 
@@ -465,6 +472,10 @@ class World:
                 continue
             alive_enemy_ids.add(enemy.entity_id)
 
+            if enemy.active_ability_id is not None:
+                enemy.velocity = Vec2(0.0, 0.0)
+                continue
+
             target_player = nearest_player(enemy.position, self.players)
             enemy.velocity = self.navigation.choose_velocity(
                 enemy=enemy,
@@ -478,6 +489,21 @@ class World:
             enemy.update(dt, self.world_width, self.world_height)
             self._resolve_blocking_for_entity(enemy, previous_position)
         self.navigation.prune(alive_enemy_ids)
+
+    def handle_enemy_player_contact(self, enemy: Enemy, player: Player) -> bool:
+        delayed_explosion = self._get_delayed_explosion_ability(enemy)
+        if delayed_explosion is None:
+            return False
+
+        self._arm_enemy_delayed_explosion(enemy, delayed_explosion)
+        return False
+
+    def resolve_enemy_damage_defeat(self, enemy: Enemy, killer_player_id: str | None) -> None:
+        delayed_explosion = self._get_delayed_explosion_ability(enemy)
+        if delayed_explosion is not None:
+            self._arm_enemy_delayed_explosion(enemy, delayed_explosion)
+            return
+        self.defeat_enemy(enemy, killer_player_id=killer_player_id)
 
     def _collect_coins(self) -> None:
         for coin in self.coins.values():
@@ -578,7 +604,88 @@ class World:
             enemy.take_damage(damage)
             if enemy.alive:
                 continue
-            self.defeat_enemy(enemy, killer_player_id=player_id)
+            self.resolve_enemy_damage_defeat(enemy, killer_player_id=player_id)
+
+    def _update_enemy_abilities(self, dt: float) -> None:
+        active_enemy_ids = [
+            enemy.entity_id
+            for enemy in self.enemies.values()
+            if enemy.alive and enemy.active_ability_id is not None
+        ]
+        for enemy_id in active_enemy_ids:
+            enemy = self.enemies.get(enemy_id)
+            if enemy is None or not enemy.alive or enemy.active_ability_id is None:
+                continue
+
+            enemy.ability_timer_seconds = max(0.0, enemy.ability_timer_seconds - dt)
+            if enemy.active_ability_id == ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH:
+                if enemy.ability_timer_seconds > 0.0:
+                    continue
+                self._explode_enemy(enemy)
+
+    def _explode_enemy(self, source_enemy: Enemy) -> None:
+        ability = self._get_delayed_explosion_ability(source_enemy)
+        if ability is None:
+            return
+
+        explosion_radius = max(1.0, float(ability.explosion_radius))
+        explosion_damage = max(1, int(ability.explosion_damage))
+        explosion_center = source_enemy.position.copy()
+
+        for player in self.players.values():
+            if not player.alive:
+                continue
+            if not circles_overlap(
+                explosion_center,
+                explosion_radius,
+                player.position,
+                player.radius,
+            ):
+                continue
+            player.take_damage(explosion_damage)
+
+        for enemy in list(self.enemies.values()):
+            if not enemy.alive or enemy.entity_id == source_enemy.entity_id:
+                continue
+            if not circles_overlap(
+                explosion_center,
+                explosion_radius,
+                enemy.position,
+                enemy.radius,
+            ):
+                continue
+            enemy.take_damage(explosion_damage)
+            if enemy.alive:
+                continue
+            self.resolve_enemy_damage_defeat(enemy, killer_player_id=None)
+
+        self.defeat_enemy(source_enemy, killer_player_id=None)
+
+    def _get_delayed_explosion_ability(self, enemy: Enemy) -> EnemyAbilityDefinition | None:
+        profile = get_enemy_profile(enemy.profile_id)
+        if profile is None:
+            return None
+        for ability in profile.abilities:
+            if ability.ability_id == ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH:
+                return ability
+        return None
+
+    def _arm_enemy_delayed_explosion(
+        self,
+        enemy: Enemy,
+        ability: EnemyAbilityDefinition,
+    ) -> None:
+        remaining_seconds = max(
+            float(ability.arming_delay_seconds),
+            float(enemy.ability_timer_seconds),
+        )
+        enemy.alive = True
+        enemy.health = max(1, enemy.health)
+        enemy.arm_ability(
+            ability.ability_id,
+            timer_seconds=remaining_seconds,
+            vfx_effect_id=ability.loop_effect_id,
+        )
 
     def _collect_blessings(self) -> None:
         for blessing in list(self.blessings.values()):
