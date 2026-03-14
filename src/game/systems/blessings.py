@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from game.core.blessings import (
     BLESSING_COIN_VACUUM,
     BLESSING_DAMAGE_AURA,
-    BLESSING_ENEMY_CLEAR,
-    BLESSING_FULL_HEAL,
+    BLESSING_DIVINE_PURGE,
+    BLESSING_SACRED_RENEWAL,
     get_blessing,
 )
 
@@ -22,11 +22,11 @@ class BlessingSystem:
         if blessing_id == BLESSING_COIN_VACUUM:
             self._apply_coin_vacuum(world, collector_player_id)
             return
-        if blessing_id == BLESSING_FULL_HEAL:
-            self._apply_full_heal(world, animated_effect_id=animated_effect_id)
+        if blessing_id == BLESSING_SACRED_RENEWAL:
+            self._apply_sacred_renewal(world, animated_effect_id=animated_effect_id)
             return
-        if blessing_id == BLESSING_ENEMY_CLEAR:
-            self._apply_enemy_clear(
+        if blessing_id == BLESSING_DIVINE_PURGE:
+            self._apply_divine_purge(
                 world,
                 collector_player_id,
                 animated_effect_id=animated_effect_id,
@@ -40,7 +40,7 @@ class BlessingSystem:
         world.activate_coin_vacuum(collector_player_id)
 
     @staticmethod
-    def _apply_full_heal(world: World, animated_effect_id: str | None) -> None:
+    def _apply_sacred_renewal(world: World, animated_effect_id: str | None) -> None:
         for player in world.players.values():
             player.health = player.max_health
             player.alive = True
@@ -48,7 +48,7 @@ class BlessingSystem:
                 world.emit_world_vfx(animated_effect_id, player.position.copy())
 
     @staticmethod
-    def _apply_enemy_clear(
+    def _apply_divine_purge(
         world: World,
         collector_player_id: str,
         animated_effect_id: str | None,

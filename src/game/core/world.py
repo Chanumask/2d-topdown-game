@@ -69,6 +69,7 @@ class World:
     _pending_actions: dict[str, PlayerActions] = field(init=False, repr=False)
     _pending_session_actions: dict[str, SessionActions] = field(init=False, repr=False)
     _pending_vfx_events: list[dict[str, object]] = field(init=False, repr=False)
+    _pending_profile_progress_events: list[dict[str, str]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._rng = random.Random()
@@ -77,6 +78,7 @@ class World:
         self._pending_actions = {}
         self._pending_session_actions = {}
         self._pending_vfx_events = []
+        self._pending_profile_progress_events = []
 
         self.spawner = EnemySpawner(
             rng=self._rng,
@@ -327,6 +329,7 @@ class World:
             coin_drop_value=spawn_request.stats.coin_drop_value,
         )
         self.enemies[enemy.entity_id] = enemy
+        self._queue_profile_progress_event(kind="enemy", entry_id=spawn_request.profile_id)
         self.enemy_director.on_enemy_spawn(self, enemy)
 
     def spawn_projectile(
@@ -378,6 +381,11 @@ class World:
         }
         self._next_vfx_event_id += 1
         self._pending_vfx_events.append(event_payload)
+
+    def consume_profile_progress_events(self) -> list[dict[str, str]]:
+        events = list(self._pending_profile_progress_events)
+        self._pending_profile_progress_events.clear()
+        return events
 
     def activate_coin_vacuum(self, collector_player_id: str) -> None:
         collector = self.players.get(collector_player_id)
@@ -708,6 +716,10 @@ class World:
                     collector_player_id=player.player_id,
                     blessing_id=blessing.blessing_id,
                 )
+                self._queue_profile_progress_event(
+                    kind="blessing",
+                    entry_id=blessing.blessing_id,
+                )
                 blessing.alive = False
                 break
 
@@ -798,6 +810,17 @@ class World:
         entity_id = self._next_entity_id
         self._next_entity_id += 1
         return entity_id
+
+    def _queue_profile_progress_event(self, *, kind: str, entry_id: str) -> None:
+        normalized_id = str(entry_id).strip()
+        if not normalized_id:
+            return
+        self._pending_profile_progress_events.append(
+            {
+                "kind": kind,
+                "id": normalized_id,
+            }
+        )
 
     def _resolve_blocking_for_entity(self, entity: Player | Enemy, previous_position: Vec2) -> None:
         if not self._has_blocking_grid() or not entity.alive:

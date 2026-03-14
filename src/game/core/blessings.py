@@ -15,11 +15,11 @@ class BlessingDefinition:
 
 
 BLESSING_COIN_VACUUM = "coin_vacuum"
-BLESSING_FULL_HEAL = "full_heal"
-BLESSING_ENEMY_CLEAR = "enemy_clear"
+BLESSING_SACRED_RENEWAL = "sacred_renewal"
+BLESSING_DIVINE_PURGE = "divine_purge"
 BLESSING_DAMAGE_AURA = "damage_aura"
-BLESSING_VFX_FULL_HEAL = "blessing_full_heal_green"
-BLESSING_VFX_ENEMY_CLEAR = "blessing_enemy_clear_red"
+BLESSING_VFX_SACRED_RENEWAL = "blessing_sacred_renewal_green"
+BLESSING_VFX_DIVINE_PURGE = "blessing_divine_purge_red"
 BLESSING_VFX_DAMAGE_AURA = "blessing_damage_aura_blue"
 
 
@@ -31,19 +31,19 @@ BLESSING_CATALOG: dict[str, BlessingDefinition] = {
         icon_path="assets/effects/blessings/coin_vacuum.png",
         has_behavior_vfx=True,
     ),
-    BLESSING_FULL_HEAL: BlessingDefinition(
-        blessing_id=BLESSING_FULL_HEAL,
-        display_name="Full Heal",
+    BLESSING_SACRED_RENEWAL: BlessingDefinition(
+        blessing_id=BLESSING_SACRED_RENEWAL,
+        display_name="Sacred Renewal",
         description="Restore all players to maximum health.",
-        icon_path="assets/effects/blessings/full_heal.png",
-        animated_effect_id=BLESSING_VFX_FULL_HEAL,
+        icon_path="assets/effects/blessings/sacred_renewal.png",
+        animated_effect_id=BLESSING_VFX_SACRED_RENEWAL,
     ),
-    BLESSING_ENEMY_CLEAR: BlessingDefinition(
-        blessing_id=BLESSING_ENEMY_CLEAR,
-        display_name="Enemy Clear",
+    BLESSING_DIVINE_PURGE: BlessingDefinition(
+        blessing_id=BLESSING_DIVINE_PURGE,
+        display_name="Divine Purge",
         description="Remove all alive enemies and trigger their normal drops.",
-        icon_path="assets/effects/blessings/enemy_clear.png",
-        animated_effect_id=BLESSING_VFX_ENEMY_CLEAR,
+        icon_path="assets/effects/blessings/divine_purge.png",
+        animated_effect_id=BLESSING_VFX_DIVINE_PURGE,
     ),
     BLESSING_DAMAGE_AURA: BlessingDefinition(
         blessing_id=BLESSING_DAMAGE_AURA,

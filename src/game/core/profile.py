@@ -33,6 +33,51 @@ class UserSettings:
 
 
 @dataclass(slots=True)
+class LogbookProgress:
+    encountered_enemy_ids: set[str] = field(default_factory=set)
+    encountered_blessing_ids: set[str] = field(default_factory=set)
+
+    def mark_enemy_encountered(self, enemy_id: str) -> bool:
+        normalized = str(enemy_id).strip()
+        if not normalized or normalized in self.encountered_enemy_ids:
+            return False
+        self.encountered_enemy_ids.add(normalized)
+        return True
+
+    def mark_blessing_encountered(self, blessing_id: str) -> bool:
+        normalized = str(blessing_id).strip()
+        if not normalized or normalized in self.encountered_blessing_ids:
+            return False
+        self.encountered_blessing_ids.add(normalized)
+        return True
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "encountered_enemy_ids": sorted(self.encountered_enemy_ids),
+            "encountered_blessing_ids": sorted(self.encountered_blessing_ids),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "LogbookProgress":
+        raw_enemy_ids = payload.get("encountered_enemy_ids", [])
+        raw_blessing_ids = payload.get("encountered_blessing_ids", [])
+        enemy_ids = {
+            str(value).strip()
+            for value in raw_enemy_ids
+            if isinstance(value, str) and str(value).strip()
+        }
+        blessing_ids = {
+            str(value).strip()
+            for value in raw_blessing_ids
+            if isinstance(value, str) and str(value).strip()
+        }
+        return cls(
+            encountered_enemy_ids=enemy_ids,
+            encountered_blessing_ids=blessing_ids,
+        )
+
+
+@dataclass(slots=True)
 class PlayerProfile:
     profile_id: str = "local-profile"
     meta_currency: int = 0
@@ -45,6 +90,7 @@ class PlayerProfile:
     lifetime_enemies_killed: int = 0
     upgrades: dict[str, int] = field(default_factory=dict)
     settings: UserSettings = field(default_factory=UserSettings)
+    logbook: LogbookProgress = field(default_factory=LogbookProgress)
 
     def bank_run_result(self, run_result: RunResult) -> None:
         coins = max(0, int(run_result.total_run_coins))
@@ -63,6 +109,12 @@ class PlayerProfile:
     def purchase_upgrade(self, upgrade_id: str) -> PurchaseResult:
         return purchase_upgrade(self, upgrade_id)
 
+    def mark_enemy_encountered(self, enemy_id: str) -> bool:
+        return self.logbook.mark_enemy_encountered(enemy_id)
+
+    def mark_blessing_encountered(self, blessing_id: str) -> bool:
+        return self.logbook.mark_blessing_encountered(blessing_id)
+
     def to_dict(self) -> dict[str, object]:
         return {
             "profile_id": self.profile_id,
@@ -76,14 +128,17 @@ class PlayerProfile:
             "lifetime_enemies_killed": self.lifetime_enemies_killed,
             "upgrades": clamp_upgrade_levels(self.upgrades),
             "settings": self.settings.to_dict(),
+            "logbook": self.logbook.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> "PlayerProfile":
         raw_settings = payload.get("settings")
         raw_upgrades = payload.get("upgrades")
+        raw_logbook = payload.get("logbook")
         settings_payload = raw_settings if isinstance(raw_settings, dict) else {}
         upgrades_payload = raw_upgrades if isinstance(raw_upgrades, dict) else {}
+        logbook_payload = raw_logbook if isinstance(raw_logbook, dict) else {}
         parsed_upgrades: dict[str, int] = {}
         for key, value in upgrades_payload.items():
             try:
@@ -109,4 +164,5 @@ class PlayerProfile:
             lifetime_enemies_killed=int(payload.get("lifetime_enemies_killed", 0)),
             upgrades=clamp_upgrade_levels(parsed_upgrades),
             settings=UserSettings.from_dict(settings_payload),
+            logbook=LogbookProgress.from_dict(logbook_payload),
         )

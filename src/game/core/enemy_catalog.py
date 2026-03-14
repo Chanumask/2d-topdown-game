@@ -62,6 +62,10 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
 }
 
 
+def list_enemy_profiles() -> list[EnemyProfile]:
+    return sorted(ENEMY_PROFILES.values(), key=lambda profile: profile.display_name.lower())
+
+
 def get_enemy_profiles() -> dict[str, EnemyProfile]:
     return ENEMY_PROFILES.copy()
 

@@ -12,7 +12,7 @@ from game.ui.widgets import (
 
 class PauseMenuScreen:
     def __init__(self) -> None:
-        self.options = ["Ready", "Settings", "Return to Main Menu"]
+        self.options = ["Ready", "Logbook", "Settings", "Return to Main Menu"]
         self.selected_index = 0
         self.hover_index: int | None = None
 
@@ -116,6 +116,8 @@ class PauseMenuScreen:
         selected = self.options[self.selected_index]
         if selected == "Ready":
             return "ready"
+        if selected == "Logbook":
+            return "open_logbook"
         if selected == "Settings":
             return "open_settings"
         if selected == "Return to Main Menu":

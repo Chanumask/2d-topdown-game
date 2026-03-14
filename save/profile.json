@@ -1,31 +1,41 @@
 {
   "profile": {
-    "last_run_coins": 106,
-    "last_run_enemies_killed": 111,
+    "last_run_coins": 94,
+    "last_run_enemies_killed": 100,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 106
+        "player-1": 94
       },
       "enemies_killed_by_player": {
-        "player-1": 0
+        "player-1": 23
       },
-      "enemies_killed_total": 111,
+      "enemies_killed_total": 100,
       "players": [
         "player-1"
       ],
-      "simulation_time": 208.48333333339139,
-      "survival_time_seconds": 208.48333333339139,
-      "tick": 12509,
-      "total_run_coins": 106
+      "simulation_time": 203.36666666672065,
+      "survival_time_seconds": 203.36666666672065,
+      "tick": 12202,
+      "total_run_coins": 94
     },
-    "last_run_survival_time_seconds": 208.48333333339139,
-    "lifetime_enemies_killed": 511,
-    "lifetime_meta_earned": 374,
-    "lifetime_runs_completed": 23,
-    "meta_currency": 15,
+    "last_run_survival_time_seconds": 203.36666666672065,
+    "lifetime_enemies_killed": 611,
+    "lifetime_meta_earned": 468,
+    "lifetime_runs_completed": 24,
+    "logbook": {
+      "encountered_blessing_ids": [
+        "divine_purge",
+        "sacred_renewal"
+      ],
+      "encountered_enemy_ids": [
+        "crimson_imp",
+        "floating_eye"
+      ]
+    },
+    "meta_currency": 109,
     "profile_id": "local-profile",
     "settings": {
-      "fullscreen": true,
+      "fullscreen": false,
       "master_volume": 50,
       "mouse_sensitivity": 1.0,
       "music_volume": 25,

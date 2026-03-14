@@ -11,7 +11,7 @@ from game.ui.widgets import (
 
 class MainMenuScreen:
     def __init__(self) -> None:
-        self.options = ["Start Run", "Shop", "Settings", "Quit"]
+        self.options = ["Start Run", "Shop", "Logbook", "Settings", "Quit"]
         self.selected_index = 0
         self.hover_index: int | None = None
 
@@ -99,6 +99,8 @@ class MainMenuScreen:
             return "start_run"
         if selected == "Shop":
             return "open_shop"
+        if selected == "Logbook":
+            return "open_logbook"
         if selected == "Settings":
             return "open_settings"
         if selected == "Quit":

@@ -1,0 +1,705 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import pygame
+
+from game.core.blessings import BlessingDefinition, list_blessings
+from game.core.enemies import EnemyProfile, EnemyTier
+from game.core.enemy_catalog import list_enemy_profiles
+from game.core.profile import PlayerProfile
+from game.input.menu_actions import MenuActions
+from game.render.blessings import BlessingSpriteLibrary
+from game.render.enemies import EnemySpriteLibrary
+from game.render.spritesheet import pixelart_upscale_surface
+from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
+
+TAB_ENEMIES = "enemies"
+TAB_BLESSINGS = "blessings"
+
+
+@dataclass(frozen=True, slots=True)
+class TabDefinition:
+    tab_id: str
+    label: str
+
+
+class LogbookScreen:
+    def __init__(self) -> None:
+        self.tabs = [
+            TabDefinition(TAB_ENEMIES, "Enemies"),
+            TabDefinition(TAB_BLESSINGS, "Blessings"),
+        ]
+        self.selected_tab_index = 0
+        self.focus_area = "grid"
+        self.detail_entry_id: str | None = None
+        self.grid_selection_by_tab: dict[str, int] = {
+            TAB_ENEMIES: 0,
+            TAB_BLESSINGS: 0,
+        }
+        self.hover_tab_index: int | None = None
+        self.hover_grid_index: int | None = None
+        self.hover_back = False
+        self.hover_prev_entry = False
+        self.hover_next_entry = False
+        self.enemy_library = EnemySpriteLibrary()
+        self.blessing_library = BlessingSpriteLibrary(world_icon_scale=4)
+        self.enemy_profiles = list_enemy_profiles()
+        self.blessings = list_blessings()
+        self._enemy_preview_cache: dict[str, pygame.Surface | None] = {}
+
+    def selection_signature(self) -> tuple[str, int, int | None, str | None]:
+        active_tab = self._active_tab_id()
+        return (
+            self.focus_area,
+            self.selected_tab_index,
+            self.grid_selection_by_tab.get(active_tab),
+            self.detail_entry_id,
+        )
+
+    def handle_input(
+        self,
+        actions: MenuActions,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+    ) -> str | None:
+        active_tab = self._active_tab_id()
+        encountered_enemy_ids = profile.logbook.encountered_enemy_ids
+        encountered_blessing_ids = profile.logbook.encountered_blessing_ids
+
+        tab_rects = self._tab_rects(surface)
+        back_rect = self._back_rect(surface)
+        if self.detail_entry_id is None:
+            entries = self._entries_for_tab(active_tab)
+            grid_rects = self._grid_rects(surface, len(entries))
+            self.hover_tab_index = hovered_index(actions.mouse_position, tab_rects)
+            self.hover_grid_index = hovered_index(actions.mouse_position, grid_rects)
+            self.hover_back = back_rect.collidepoint(actions.mouse_position or (-1, -1))
+
+            if actions.mouse_moved:
+                if self.hover_grid_index is not None:
+                    self.grid_selection_by_tab[active_tab] = self.hover_grid_index
+                    self.focus_area = "grid"
+                elif self.hover_back:
+                    self.focus_area = "back"
+                elif self.hover_tab_index is not None:
+                    self.focus_area = "tabs"
+
+            if actions.mouse_left_click:
+                if self.hover_tab_index is not None:
+                    self.selected_tab_index = self.hover_tab_index
+                    self.focus_area = "tabs"
+                    return None
+                if self.hover_grid_index is not None:
+                    self.grid_selection_by_tab[active_tab] = self.hover_grid_index
+                    self.focus_area = "grid"
+                    return self._open_detail_if_unlocked(
+                        tab_id=active_tab,
+                        index=self.hover_grid_index,
+                        encountered_enemy_ids=encountered_enemy_ids,
+                        encountered_blessing_ids=encountered_blessing_ids,
+                    )
+                if self.hover_back:
+                    self.focus_area = "back"
+                    return "back"
+
+            if self.focus_area == "tabs":
+                if actions.navigate_left:
+                    self.selected_tab_index = (self.selected_tab_index - 1) % len(self.tabs)
+                if actions.navigate_right:
+                    self.selected_tab_index = (self.selected_tab_index + 1) % len(self.tabs)
+                if actions.navigate_down:
+                    self.focus_area = "grid"
+                if actions.select:
+                    return None
+            elif self.focus_area == "grid":
+                self._handle_grid_navigation(actions, surface, active_tab)
+                if actions.select:
+                    return self._open_detail_if_unlocked(
+                        tab_id=active_tab,
+                        index=self.grid_selection_by_tab[active_tab],
+                        encountered_enemy_ids=encountered_enemy_ids,
+                        encountered_blessing_ids=encountered_blessing_ids,
+                    )
+            elif self.focus_area == "back":
+                if actions.navigate_up:
+                    self.focus_area = "grid"
+                if actions.select:
+                    return "back"
+
+            if actions.back:
+                return "back"
+            return None
+
+        self.hover_tab_index = None
+        self.hover_grid_index = None
+        prev_rect = self._detail_prev_rect(surface)
+        next_rect = self._detail_next_rect(surface)
+        self.hover_back = back_rect.collidepoint(actions.mouse_position or (-1, -1))
+        self.hover_prev_entry = prev_rect.collidepoint(actions.mouse_position or (-1, -1))
+        self.hover_next_entry = next_rect.collidepoint(actions.mouse_position or (-1, -1))
+        if actions.mouse_moved:
+            if self.hover_prev_entry:
+                self.focus_area = "detail_prev"
+            elif self.hover_next_entry:
+                self.focus_area = "detail_next"
+            elif self.hover_back:
+                self.focus_area = "back"
+        if actions.mouse_left_click and self.hover_prev_entry:
+            self._cycle_detail_entry(profile, step=-1)
+            return None
+        if actions.mouse_left_click and self.hover_next_entry:
+            self._cycle_detail_entry(profile, step=1)
+            return None
+        if actions.mouse_left_click and self.hover_back:
+            self.detail_entry_id = None
+            return None
+        if actions.navigate_left:
+            self._cycle_detail_entry(profile, step=-1)
+            return None
+        if actions.navigate_right:
+            self._cycle_detail_entry(profile, step=1)
+            return None
+        if actions.select and self.focus_area == "detail_prev":
+            self._cycle_detail_entry(profile, step=-1)
+            return None
+        if actions.select and self.focus_area == "detail_next":
+            self._cycle_detail_entry(profile, step=1)
+            return None
+        if actions.select or actions.back:
+            self.detail_entry_id = None
+        return None
+
+    def render(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        title_font: pygame.font.Font,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        width, _ = surface.get_size()
+        draw_centered_text(surface, title_font, "Logbook", 60, (245, 245, 245))
+        draw_centered_text(
+            surface,
+            body_font,
+            "Enemies and blessings discovered in your runs",
+            102,
+            (180, 180, 180),
+        )
+
+        active_tab = self._active_tab_id()
+        self._draw_tabs(surface, body_font)
+
+        if self.detail_entry_id is None:
+            if active_tab == TAB_ENEMIES:
+                self._draw_enemy_overview(surface, profile, body_font, small_font)
+            else:
+                self._draw_blessing_overview(surface, profile, body_font, small_font)
+        elif active_tab == TAB_ENEMIES:
+            self._draw_enemy_detail(surface, profile, body_font, small_font)
+        else:
+            self._draw_blessing_detail(surface, profile, body_font, small_font)
+
+        back_rect = self._back_rect(surface)
+        back_label = "Back to Overview" if self.detail_entry_id is not None else "Back"
+        self._draw_button(
+            surface,
+            small_font if self.detail_entry_id is not None else body_font,
+            back_rect,
+            back_label,
+            selected=self.focus_area == "back",
+            hovered=self.hover_back,
+        )
+        if self.detail_entry_id is None:
+            encountered = (
+                len(profile.logbook.encountered_enemy_ids)
+                if active_tab == TAB_ENEMIES
+                else len(profile.logbook.encountered_blessing_ids)
+            )
+            total = len(self._entries_for_tab(active_tab))
+            progress_text = f"Discovered: {encountered} / {total}"
+            rendered = small_font.render(progress_text, True, (175, 175, 175))
+            surface.blit(rendered, (width - rendered.get_width() - 36, 112))
+
+    def _draw_tabs(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
+        for index, tab in enumerate(self.tabs):
+            rect = self._tab_rects(surface)[index]
+            self._draw_button(
+                surface,
+                font,
+                rect,
+                tab.label,
+                selected=self.selected_tab_index == index and self.focus_area == "tabs",
+                hovered=self.hover_tab_index == index or self.selected_tab_index == index,
+            )
+
+    def _draw_enemy_overview(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        rects = self._grid_rects(surface, len(self.enemy_profiles))
+        selected_index = self.grid_selection_by_tab[TAB_ENEMIES]
+        for index, enemy_profile in enumerate(self.enemy_profiles):
+            encountered = enemy_profile.profile_id in profile.logbook.encountered_enemy_ids
+            self._draw_grid_entry(
+                surface,
+                body_font,
+                small_font,
+                rects[index],
+                title=enemy_profile.display_name if encountered else "Unknown",
+                subtitle="",
+                sprite=self._enemy_preview(enemy_profile.profile_id) if encountered else None,
+                selected=self.focus_area == "grid" and selected_index == index,
+                hovered=self.hover_grid_index == index,
+                unlocked=encountered,
+                accent_color=(self._enemy_tier_color(enemy_profile.tier) if encountered else None),
+            )
+
+    def _draw_blessing_overview(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        rects = self._grid_rects(surface, len(self.blessings))
+        selected_index = self.grid_selection_by_tab[TAB_BLESSINGS]
+        for index, blessing in enumerate(self.blessings):
+            encountered = blessing.blessing_id in profile.logbook.encountered_blessing_ids
+            self._draw_grid_entry(
+                surface,
+                body_font,
+                small_font,
+                rects[index],
+                title=blessing.display_name if encountered else "Unknown",
+                subtitle="",
+                sprite=self.blessing_library.get_icon(blessing.blessing_id, scale_multiple=4)
+                if encountered
+                else None,
+                selected=self.focus_area == "grid" and selected_index == index,
+                hovered=self.hover_grid_index == index,
+                unlocked=encountered,
+            )
+
+    def _draw_enemy_detail(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        if self.detail_entry_id is None:
+            return
+        enemy = next(
+            (entry for entry in self.enemy_profiles if entry.profile_id == self.detail_entry_id),
+            None,
+        )
+        if enemy is None or enemy.profile_id not in profile.logbook.encountered_enemy_ids:
+            self.detail_entry_id = None
+            return
+
+        self._draw_detail_panel(
+            surface=surface,
+            body_font=body_font,
+            small_font=small_font,
+            title=enemy.display_name,
+            sprite=self._enemy_preview(enemy.profile_id),
+            stat_lines=[
+                f"Tier: {enemy.tier.value.title()}",
+                f"Tags: {', '.join(enemy.tags) if enemy.tags else 'None'}",
+                f"Max HP: {enemy.stats.max_health}",
+                f"Speed: {enemy.stats.speed:.0f}",
+                f"Touch Damage: {enemy.stats.touch_damage}",
+                f"Coin Drop: {enemy.stats.coin_drop_value}",
+                f"Radius: {enemy.stats.radius:.0f}",
+            ],
+            detail_lines=self._enemy_ability_detail_lines(enemy, body_font),
+            detail_title="Abilities",
+        )
+        self._draw_detail_nav(surface, body_font, profile)
+
+    def _draw_blessing_detail(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        if self.detail_entry_id is None:
+            return
+        blessing = next(
+            (entry for entry in self.blessings if entry.blessing_id == self.detail_entry_id),
+            None,
+        )
+        if blessing is None or blessing.blessing_id not in profile.logbook.encountered_blessing_ids:
+            self.detail_entry_id = None
+            return
+
+        detail_lines = wrap_text(body_font, blessing.description, max_width=430)
+        self._draw_detail_panel(
+            surface=surface,
+            body_font=body_font,
+            small_font=small_font,
+            title=blessing.display_name,
+            sprite=self.blessing_library.get_icon(blessing.blessing_id, scale_multiple=5),
+            stat_lines=[
+                "Type: Blessing",
+                "Status: Discovered",
+            ],
+            detail_lines=detail_lines,
+            detail_title="Effect",
+        )
+        self._draw_detail_nav(surface, body_font, profile)
+
+    def _draw_grid_entry(
+        self,
+        surface: pygame.Surface,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+        rect: pygame.Rect,
+        *,
+        title: str,
+        subtitle: str,
+        sprite: pygame.Surface | None,
+        selected: bool,
+        hovered: bool,
+        unlocked: bool,
+        accent_color: tuple[int, int, int] | None = None,
+    ) -> None:
+        bg = (34, 38, 46)
+        border = (88, 96, 108)
+        if hovered:
+            bg = (52, 58, 70)
+            border = (140, 150, 165)
+        if selected:
+            bg = (64, 72, 86)
+            border = (255, 235, 120)
+        elif unlocked and accent_color is not None:
+            border = accent_color
+
+        pygame.draw.rect(surface, bg, rect, border_radius=10)
+        pygame.draw.rect(surface, border, rect, width=2, border_radius=10)
+        if unlocked and accent_color is not None:
+            accent_rect = pygame.Rect(rect.x, rect.y, rect.width, 8)
+            pygame.draw.rect(
+                surface,
+                accent_color,
+                accent_rect,
+                border_top_left_radius=10,
+                border_top_right_radius=10,
+            )
+
+        icon_center = (rect.centerx, rect.y + 46)
+        if sprite is not None:
+            icon_rect = sprite.get_rect(center=icon_center)
+            surface.blit(sprite, icon_rect)
+        else:
+            pygame.draw.circle(surface, (58, 64, 74), icon_center, 26)
+            pygame.draw.circle(surface, (96, 104, 118), icon_center, 26, width=2)
+            question = body_font.render("?", True, (176, 176, 176))
+            surface.blit(question, question.get_rect(center=icon_center))
+
+        title_lines = wrap_text(small_font, title, max_width=rect.width - 14)
+        for line_index, line in enumerate(title_lines[:2]):
+            rendered = small_font.render(
+                line,
+                True,
+                (225, 225, 225) if unlocked else (175, 175, 175),
+            )
+            surface.blit(
+                rendered,
+                rendered.get_rect(center=(rect.centerx, rect.y + 84 + (line_index * 18))),
+            )
+
+        if subtitle:
+            subtitle_render = small_font.render(subtitle, True, (160, 160, 160))
+            surface.blit(
+                subtitle_render,
+                subtitle_render.get_rect(center=(rect.centerx, rect.bottom - 16)),
+            )
+
+    def _draw_detail_panel(
+        self,
+        *,
+        surface: pygame.Surface,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+        title: str,
+        sprite: pygame.Surface | None,
+        stat_lines: list[str],
+        detail_lines: list[str],
+        detail_title: str,
+    ) -> None:
+        panel_rect = self._detail_panel_rect(surface)
+        pygame.draw.rect(surface, (30, 34, 42), panel_rect, border_radius=12)
+        pygame.draw.rect(surface, (108, 116, 128), panel_rect, width=2, border_radius=12)
+
+        title_render = body_font.render(title, True, (235, 235, 235))
+        surface.blit(title_render, (panel_rect.x + 28, panel_rect.y + 24))
+
+        if sprite is not None:
+            sprite_rect = sprite.get_rect(center=(panel_rect.x + 116, panel_rect.y + 118))
+            surface.blit(sprite, sprite_rect)
+
+        left_x = panel_rect.x + 28
+        stats_y = panel_rect.y + 190
+        stats_title = small_font.render("Stats", True, (180, 180, 180))
+        surface.blit(stats_title, (left_x, stats_y))
+        for index, line in enumerate(stat_lines):
+            rendered = body_font.render(line, True, (225, 225, 225))
+            surface.blit(rendered, (left_x, stats_y + 30 + (index * 30)))
+
+        right_x = panel_rect.x + max(240, panel_rect.width // 2)
+        detail_title_render = small_font.render(detail_title, True, (180, 180, 180))
+        surface.blit(detail_title_render, (right_x, panel_rect.y + 78))
+        for index, line in enumerate(detail_lines):
+            if not line:
+                continue
+            rendered = body_font.render(line, True, (220, 220, 220))
+            surface.blit(rendered, (right_x, panel_rect.y + 108 + (index * 24)))
+
+    def _draw_detail_nav(
+        self,
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+        profile: PlayerProfile,
+    ) -> None:
+        has_multiple = len(self._discovered_entry_ids_for_active_tab(profile)) > 1
+        prev_rect = self._detail_prev_rect(surface)
+        self._draw_button(
+            surface,
+            font,
+            prev_rect,
+            "Prev",
+            selected=self.focus_area == "detail_prev",
+            hovered=self.hover_prev_entry,
+            enabled=has_multiple,
+        )
+        self._draw_button(
+            surface,
+            font,
+            self._detail_next_rect(surface),
+            "Next",
+            selected=self.focus_area == "detail_next",
+            hovered=self.hover_next_entry,
+            enabled=has_multiple,
+        )
+
+    def _entries_for_tab(self, tab_id: str) -> list[EnemyProfile | BlessingDefinition]:
+        if tab_id == TAB_ENEMIES:
+            return self.enemy_profiles
+        return self.blessings
+
+    def _active_tab_id(self) -> str:
+        return self.tabs[self.selected_tab_index].tab_id
+
+    def _open_detail_if_unlocked(
+        self,
+        *,
+        tab_id: str,
+        index: int,
+        encountered_enemy_ids: set[str],
+        encountered_blessing_ids: set[str],
+    ) -> str | None:
+        entries = self._entries_for_tab(tab_id)
+        if not (0 <= index < len(entries)):
+            return None
+        entry = entries[index]
+        if tab_id == TAB_ENEMIES:
+            enemy = entry if isinstance(entry, EnemyProfile) else None
+            if enemy is None or enemy.profile_id not in encountered_enemy_ids:
+                return None
+            self.detail_entry_id = enemy.profile_id
+            self.focus_area = "detail_next"
+            return None
+
+        blessing = entry if isinstance(entry, BlessingDefinition) else None
+        if blessing is None or blessing.blessing_id not in encountered_blessing_ids:
+            return None
+        self.detail_entry_id = blessing.blessing_id
+        self.focus_area = "detail_next"
+        return None
+
+    def _handle_grid_navigation(
+        self,
+        actions: MenuActions,
+        surface: pygame.Surface,
+        tab_id: str,
+    ) -> None:
+        entries = self._entries_for_tab(tab_id)
+        if not entries:
+            return
+
+        columns = self._grid_columns(surface)
+        current = self.grid_selection_by_tab[tab_id]
+        if actions.navigate_left:
+            current = max(0, current - 1)
+        if actions.navigate_right:
+            current = min(len(entries) - 1, current + 1)
+        if actions.navigate_up:
+            if current - columns >= 0:
+                current -= columns
+            else:
+                self.focus_area = "tabs"
+        if actions.navigate_down:
+            if current + columns < len(entries):
+                current += columns
+            else:
+                self.focus_area = "back"
+        self.grid_selection_by_tab[tab_id] = current
+
+    def _enemy_preview(self, enemy_id: str) -> pygame.Surface | None:
+        if enemy_id in self._enemy_preview_cache:
+            return self._enemy_preview_cache[enemy_id]
+
+        clip = self.enemy_library.get_animation_clip(enemy_id)
+        if clip is None or not clip.frames:
+            self._enemy_preview_cache[enemy_id] = None
+            return None
+
+        preview = pixelart_upscale_surface(clip.frames[0], 2)
+        self._enemy_preview_cache[enemy_id] = preview
+        return preview
+
+    def _enemy_tier_color(self, tier: EnemyTier) -> tuple[int, int, int]:
+        if tier is EnemyTier.ELITE:
+            return (156, 92, 224)
+        if tier is EnemyTier.BOSS:
+            return (230, 190, 80)
+        return (128, 132, 138)
+
+    def _enemy_ability_detail_lines(
+        self,
+        enemy: EnemyProfile,
+        font: pygame.font.Font,
+    ) -> list[str]:
+        if not enemy.abilities:
+            return ["No special abilities recorded."]
+
+        lines: list[str] = []
+        for ability in enemy.abilities:
+            if lines:
+                lines.append("")
+            lines.append(ability.display_name)
+            description_lines = wrap_text(
+                font,
+                ability.description or "No description recorded.",
+                max_width=360,
+            )
+            lines.extend(description_lines)
+        return lines
+
+    def _discovered_entry_ids_for_active_tab(self, profile: PlayerProfile) -> list[str]:
+        if self._active_tab_id() == TAB_ENEMIES:
+            return [
+                enemy.profile_id
+                for enemy in self.enemy_profiles
+                if enemy.profile_id in profile.logbook.encountered_enemy_ids
+            ]
+        return [
+            blessing.blessing_id
+            for blessing in self.blessings
+            if blessing.blessing_id in profile.logbook.encountered_blessing_ids
+        ]
+
+    def _cycle_detail_entry(self, profile: PlayerProfile, *, step: int) -> None:
+        discovered_entries = self._discovered_entry_ids_for_active_tab(profile)
+        if len(discovered_entries) <= 1 or self.detail_entry_id is None:
+            return
+        try:
+            current_index = discovered_entries.index(self.detail_entry_id)
+        except ValueError:
+            self.detail_entry_id = discovered_entries[0]
+            return
+        self.detail_entry_id = discovered_entries[(current_index + step) % len(discovered_entries)]
+
+    def _tab_rects(self, surface: pygame.Surface) -> list[pygame.Rect]:
+        width = 180
+        height = 42
+        gap = 16
+        total_width = (len(self.tabs) * width) + ((len(self.tabs) - 1) * gap)
+        start_x = (surface.get_width() - total_width) // 2
+        y = 130
+        return [
+            pygame.Rect(start_x + index * (width + gap), y, width, height)
+            for index in range(len(self.tabs))
+        ]
+
+    def _grid_columns(self, surface: pygame.Surface) -> int:
+        return max(3, min(5, surface.get_width() // 200))
+
+    def _grid_rects(self, surface: pygame.Surface, entry_count: int) -> list[pygame.Rect]:
+        columns = self._grid_columns(surface)
+        cell_width = 146
+        cell_height = 126
+        gap_x = 16
+        gap_y = 16
+        total_width = (columns * cell_width) + ((columns - 1) * gap_x)
+        start_x = max(36, (surface.get_width() - total_width) // 2)
+        start_y = 190
+        rects: list[pygame.Rect] = []
+        for index in range(entry_count):
+            row = index // columns
+            col = index % columns
+            rects.append(
+                pygame.Rect(
+                    start_x + col * (cell_width + gap_x),
+                    start_y + row * (cell_height + gap_y),
+                    cell_width,
+                    cell_height,
+                )
+            )
+        return rects
+
+    def _back_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        return pygame.Rect(
+            (surface.get_width() - 240) // 2,
+            surface.get_height() - 76,
+            240,
+            42,
+        )
+
+    def _detail_panel_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        return pygame.Rect(110, 200, surface.get_width() - 220, surface.get_height() - 360)
+
+    def _detail_prev_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        panel_rect = self._detail_panel_rect(surface)
+        return pygame.Rect(panel_rect.right - 188, panel_rect.y + 18, 76, 36)
+
+    def _detail_next_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        panel_rect = self._detail_panel_rect(surface)
+        return pygame.Rect(panel_rect.right - 100, panel_rect.y + 18, 76, 36)
+
+    @staticmethod
+    def _draw_button(
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+        rect: pygame.Rect,
+        label: str,
+        *,
+        selected: bool,
+        hovered: bool,
+        enabled: bool = True,
+    ) -> None:
+        bg = (34, 38, 46)
+        border = (88, 96, 108)
+        text_color = (225, 225, 225)
+        if not enabled:
+            bg = (26, 29, 36)
+            border = (68, 72, 80)
+            text_color = (110, 110, 110)
+        if hovered:
+            bg = (52, 58, 70)
+            border = (140, 150, 165)
+        if selected:
+            bg = (64, 72, 86)
+            border = (255, 235, 120)
+
+        pygame.draw.rect(surface, bg, rect, border_radius=8)
+        pygame.draw.rect(surface, border, rect, width=2, border_radius=8)
+        rendered = font.render(label, True, text_color)
+        surface.blit(rendered, rendered.get_rect(center=rect.center))

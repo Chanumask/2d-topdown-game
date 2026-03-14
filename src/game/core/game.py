@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import pygame
 
@@ -29,6 +30,7 @@ from game.settings import SETTINGS
 from game.ui import (
     GameOverScreen,
     LobbyScreen,
+    LogbookScreen,
     MainMenuScreen,
     PauseMenuScreen,
     SettingsScreen,
@@ -56,6 +58,8 @@ class GameApp:
         self.profile = self.profile_store.load_or_create_profile()
         self.audio = AudioManager()
         self.audio.apply_settings(self.profile.settings)
+        self._windowed_size = (SETTINGS.screen_width, SETTINGS.screen_height)
+        self._fullscreen_active = False
 
         self.screen = self._apply_display_mode()
         self.clock = pygame.time.Clock()
@@ -69,6 +73,7 @@ class GameApp:
 
         self.main_menu = MainMenuScreen()
         self.lobby_menu = LobbyScreen()
+        self.logbook_menu = LogbookScreen()
         self.shop_menu = ShopScreen()
         self.settings_menu = SettingsScreen()
         self.pause_menu = PauseMenuScreen()
@@ -116,10 +121,12 @@ class GameApp:
             self._sync_music_for_current_screen()
             frame_dt = self.clock.tick(SETTINGS.max_render_fps) / 1000.0
             events = pygame.event.get()
+            self._handle_window_events(events)
 
             if self.app_state.current_screen in (
                 AppScreen.MAIN_MENU,
                 AppScreen.LOBBY,
+                AppScreen.LOGBOOK,
                 AppScreen.SHOP,
                 AppScreen.SETTINGS,
             ):
@@ -155,6 +162,8 @@ class GameApp:
                 self.app_state.current_screen = AppScreen.LOBBY
             elif command == "open_shop":
                 self.app_state.current_screen = AppScreen.SHOP
+            elif command == "open_logbook":
+                self.app_state.open_logbook()
             elif command == "open_settings":
                 self.app_state.open_settings()
             elif command == "quit":
@@ -210,6 +219,22 @@ class GameApp:
             if command == "back":
                 self.app_state.current_screen = AppScreen.MAIN_MENU
 
+        elif self.app_state.current_screen is AppScreen.LOGBOOK:
+            previous_signature = self.logbook_menu.selection_signature()
+            command = self.logbook_menu.handle_input(
+                menu_actions,
+                self.screen,
+                self.profile,
+            )
+            current_signature = self.logbook_menu.selection_signature()
+            self._play_menu_audio_feedback(
+                previous_index=hash(previous_signature),
+                current_index=hash(current_signature),
+                selected_or_clicked=menu_actions.select or menu_actions.mouse_left_click,
+            )
+            if command == "back":
+                self.app_state.close_logbook()
+
         elif self.app_state.current_screen is AppScreen.SETTINGS:
             previous_index = self.settings_menu.selected_index
             before = self.profile.settings.to_dict()
@@ -256,6 +281,7 @@ class GameApp:
 
             previous_attack_tick, previous_coin_count = self._local_player_progress()
             self.run_loop.advance(frame_dt)
+            self._update_logbook_progress_from_world()
             current_attack_tick, current_coin_count = self._local_player_progress()
             if current_attack_tick > previous_attack_tick:
                 self.audio.play_player_rock_throw()
@@ -287,6 +313,9 @@ class GameApp:
                     self.local_player_id,
                     SessionActions(ready_up=True),
                 )
+            elif command == "open_logbook":
+                self.app_state.open_logbook()
+                return
             elif command == "open_settings":
                 self.app_state.open_settings()
                 return
@@ -295,6 +324,7 @@ class GameApp:
                 return
 
             self.run_loop.advance(frame_dt)
+            self._update_logbook_progress_from_world()
             self._play_countdown_tick_audio()
 
         elif self.app_state.current_screen is AppScreen.GAME_OVER:
@@ -342,6 +372,14 @@ class GameApp:
             )
         elif self.app_state.current_screen is AppScreen.SHOP:
             self.shop_menu.render(self.screen, self.profile, self.title_font, self.body_font)
+        elif self.app_state.current_screen is AppScreen.LOGBOOK:
+            self.logbook_menu.render(
+                self.screen,
+                self.profile,
+                self.title_font,
+                self.body_font,
+                self.small_font,
+            )
         elif self.app_state.current_screen is AppScreen.SETTINGS:
             self.settings_menu.render(
                 self.screen,
@@ -529,6 +567,18 @@ class GameApp:
         self.profile_store.save_profile(self.profile)
 
     def _sync_music_for_current_screen(self) -> None:
+        if self.app_state.current_screen is AppScreen.LOGBOOK:
+            if self.app_state.logbook_return_screen in {
+                AppScreen.IN_RUN,
+                AppScreen.PAUSE_COUNTDOWN,
+                AppScreen.PAUSED,
+                AppScreen.RESUME_COUNTDOWN,
+                AppScreen.GAME_OVER,
+            }:
+                self.audio.play_gameplay_music()
+                return
+            self.audio.play_menu_music()
+            return
         if self.app_state.current_screen in MENU_MUSIC_SCREENS:
             self.audio.play_menu_music()
             return
@@ -571,6 +621,25 @@ class GameApp:
         if self._countdown_audio_second != current_second:
             self.audio.play_ui_timer_tick()
             self._countdown_audio_second = current_second
+
+    def _update_logbook_progress_from_world(self) -> None:
+        if self.world is None:
+            return
+
+        changed = False
+        for event in self.world.consume_profile_progress_events():
+            event_kind = event.get("kind", "").strip()
+            entry_id = event.get("id", "").strip()
+            if not entry_id:
+                continue
+
+            if event_kind == "enemy":
+                changed = self.profile.mark_enemy_encountered(entry_id) or changed
+            elif event_kind == "blessing":
+                changed = self.profile.mark_blessing_encountered(entry_id) or changed
+
+        if changed:
+            self._save_profile()
 
     def _local_player_progress(self) -> tuple[int, int]:
         if self.world is None:
@@ -646,13 +715,52 @@ class GameApp:
         self.camera.update(focus_position)
 
     def _apply_display_mode(self) -> pygame.Surface:
-        if self.profile.settings.fullscreen:
-            screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-        else:
-            screen = pygame.display.set_mode((SETTINGS.screen_width, SETTINGS.screen_height))
+        target_fullscreen = bool(self.profile.settings.fullscreen)
+        current_surface = pygame.display.get_surface()
+        if target_fullscreen and not self._fullscreen_active and current_surface is not None:
+            self._windowed_size = current_surface.get_size()
+
+        flags = pygame.FULLSCREEN if target_fullscreen else pygame.RESIZABLE
+        size = (0, 0) if target_fullscreen else self._windowed_size
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Requested window was forcibly resized by the OS\\.",
+                category=RuntimeWarning,
+            )
+            screen = pygame.display.set_mode(size, flags)
+
+        self._fullscreen_active = target_fullscreen
+        if not target_fullscreen:
+            self._windowed_size = screen.get_size()
 
         pygame.display.set_caption(SETTINGS.title)
+        self._sync_display_surface(screen)
 
+        return screen
+
+    def _handle_window_events(self, events: list[pygame.event.Event]) -> None:
+        for event in events:
+            if event.type in {
+                pygame.WINDOWRESIZED,
+                pygame.WINDOWSIZECHANGED,
+                pygame.VIDEORESIZE,
+            }:
+                if not self._fullscreen_active:
+                    width = int(
+                        getattr(event, "x", 0) or getattr(event, "w", 0) or self.screen.get_width()
+                    )
+                    height = int(
+                        getattr(event, "y", 0) or getattr(event, "h", 0) or self.screen.get_height()
+                    )
+                    self._windowed_size = (max(320, width), max(240, height))
+                self._sync_display_surface(pygame.display.get_surface())
+
+    def _sync_display_surface(self, screen: pygame.Surface | None) -> None:
+        if screen is None:
+            return
+
+        self.screen = screen
         if hasattr(self, "renderer"):
             self.renderer.set_screen(screen)
         if hasattr(self, "camera"):
@@ -662,5 +770,3 @@ class GameApp:
                 self.camera.set_world_bounds(self.world.world_width, self.world.world_height)
             else:
                 self.camera.set_world_bounds(SETTINGS.world_width, SETTINGS.world_height)
-
-        return screen

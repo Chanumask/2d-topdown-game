@@ -8,8 +8,8 @@ import pygame
 
 from game.core.blessings import (
     BLESSING_VFX_DAMAGE_AURA,
-    BLESSING_VFX_ENEMY_CLEAR,
-    BLESSING_VFX_FULL_HEAL,
+    BLESSING_VFX_DIVINE_PURGE,
+    BLESSING_VFX_SACRED_RENEWAL,
 )
 from game.core.enemies import ENEMY_VFX_FLOATING_EYE_PURPLE
 from game.render.spritesheet import load_image, pixelart_upscale_surface
@@ -89,16 +89,16 @@ EFFECT_SHEET_CATALOG: dict[str, EffectSheetDefinition] = {
 
 # Frame coordinates use a 16x16 grid, with (0, 0) at the top-left tile.
 EFFECT_CATALOG: dict[str, EffectDefinition] = {
-    BLESSING_VFX_FULL_HEAL: EffectDefinition(
-        effect_id=BLESSING_VFX_FULL_HEAL,
+    BLESSING_VFX_SACRED_RENEWAL: EffectDefinition(
+        effect_id=BLESSING_VFX_SACRED_RENEWAL,
         sheet_key="green_sheet",
         frame_sequence=((14, 3), (15, 3), (16, 3), (17, 3)),
         fps=4.0 / _BLESSING_VFX_TARGET_DURATION_SECONDS,
         scale_multiple=3,
         loop=False,
     ),
-    BLESSING_VFX_ENEMY_CLEAR: EffectDefinition(
-        effect_id=BLESSING_VFX_ENEMY_CLEAR,
+    BLESSING_VFX_DIVINE_PURGE: EffectDefinition(
+        effect_id=BLESSING_VFX_DIVINE_PURGE,
         sheet_key="red_sheet",
         frame_sequence=((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)),
         fps=14.0,
