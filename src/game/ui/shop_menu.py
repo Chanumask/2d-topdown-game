@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import math
+
 import pygame
 
 from game.core.profile import PlayerProfile
@@ -9,14 +13,18 @@ from game.core.upgrades import (
     list_upgrades,
 )
 from game.input.menu_actions import MenuActions
+from game.render.upgrades import UpgradeSpriteLibrary
 from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
 
 
 class ShopScreen:
     def __init__(self) -> None:
         self.upgrades: list[UpgradeDefinition] = list_upgrades()
+        self.icon_library = UpgradeSpriteLibrary(self.upgrades)
         self.selected_index = 0
+        self.focus_area = "grid"
         self.hover_index: int | None = None
+        self.hover_back = False
         self.last_message = ""
 
     def handle_input(
@@ -27,27 +35,39 @@ class ShopScreen:
     ) -> tuple[str | None, bool]:
         changed_profile = False
 
-        max_index = len(self.upgrades)
-        if actions.navigate_up:
-            self.selected_index = (self.selected_index - 1) % (max_index + 1)
-        if actions.navigate_down:
-            self.selected_index = (self.selected_index + 1) % (max_index + 1)
+        tile_rects = self._tile_rects(surface)
+        self.hover_index = hovered_index(actions.mouse_position, tile_rects)
+        back_rect = self._back_rect(surface)
+        self.hover_back = back_rect.collidepoint(actions.mouse_position or (-1, -1))
 
-        visible_indexes, row_rects, _ = self._list_layout(surface)
-        hovered = self._hovered_entry(actions.mouse_position, visible_indexes, row_rects)
-        self.hover_index = hovered
-        if actions.mouse_moved and hovered is not None:
-            self.selected_index = hovered
+        if actions.mouse_moved:
+            if self.hover_index is not None:
+                self.selected_index = self.hover_index
+                self.focus_area = "grid"
+            elif self.hover_back:
+                self.focus_area = "back"
 
         if actions.back:
             return "back", changed_profile
 
-        if actions.mouse_left_click and hovered is not None:
-            self.selected_index = hovered
-            return self._activate_selected(profile)
+        if actions.mouse_left_click:
+            if self.hover_index is not None:
+                self.selected_index = self.hover_index
+                self.focus_area = "grid"
+                return self._activate_selected(profile)
+            if self.hover_back:
+                self.focus_area = "back"
+                return "back", changed_profile
 
-        if actions.select:
-            return self._activate_selected(profile)
+        if self.focus_area == "grid":
+            self._handle_grid_navigation(actions, surface)
+            if actions.select:
+                return self._activate_selected(profile)
+        elif self.focus_area == "back":
+            if actions.navigate_down and self.upgrades:
+                self.focus_area = "grid"
+            if actions.select:
+                return "back", changed_profile
 
         return None, changed_profile
 
@@ -57,6 +77,7 @@ class ShopScreen:
         profile: PlayerProfile,
         title_font: pygame.font.Font,
         body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
     ) -> None:
         width, height = surface.get_size()
         margin_x = max(24, width // 20)
@@ -68,8 +89,6 @@ class ShopScreen:
         panel_height = max(170, min(260, height // 3))
         panel_top = height - panel_height - 16
 
-        visible_indexes, row_rects, _ = self._list_layout(surface)
-
         draw_centered_text(surface, title_font, "Shop", title_y, (245, 245, 245))
         draw_centered_text(
             surface,
@@ -80,73 +99,42 @@ class ShopScreen:
         )
         draw_centered_text(
             surface,
-            body_font,
-            "Run coins are earned in runs and banked into persistent currency.",
+            small_font,
+            "Upgrade tiles buy persistent power-ups for future runs.",
             helper_y,
             (180, 180, 180),
         )
 
-        for list_offset, actual_index in enumerate(visible_indexes):
-            row_rect = row_rects[list_offset]
-            is_selected = actual_index == self.selected_index
-            is_hovered = actual_index == self.hover_index
+        self._draw_button(
+            surface,
+            body_font,
+            self._back_rect(surface),
+            "Back",
+            selected=self.focus_area == "back",
+            hovered=self.hover_back,
+        )
 
-            if is_selected:
-                bg = (64, 72, 86)
-                border = (255, 235, 120)
-            elif is_hovered:
-                bg = (52, 58, 70)
-                border = (140, 150, 165)
-            else:
-                bg = (34, 38, 46)
-                border = (88, 96, 108)
-
-            pygame.draw.rect(surface, bg, row_rect, border_radius=8)
-            pygame.draw.rect(surface, border, row_rect, width=2, border_radius=8)
-
-            if actual_index >= len(self.upgrades):
-                back_text = body_font.render("Back to Main Menu", True, (220, 220, 220))
-                surface.blit(
-                    back_text,
-                    (row_rect.x + 14, row_rect.centery - (back_text.get_height() // 2)),
-                )
-                continue
-
-            upgrade = self.upgrades[actual_index]
-            level = profile.upgrades.get(upgrade.upgrade_id, 0)
-            maxed = level >= upgrade.max_level
-            cost = None if maxed else compute_upgrade_cost(upgrade, level)
-            affordable = cost is not None and profile.meta_currency >= cost
-
-            left_text = f"{upgrade.display_name}  Lv {level}/{upgrade.max_level}"
-            if maxed:
-                right_text = "MAXED"
-            elif affordable:
-                right_text = f"Cost {cost} | BUY"
-            else:
-                right_text = f"Cost {cost} | LOCK"
-
-            left_render = body_font.render(left_text, True, (220, 220, 220))
-            right_render = body_font.render(right_text, True, (220, 220, 220))
-            surface.blit(
-                left_render,
-                (row_rect.x + 14, row_rect.centery - (left_render.get_height() // 2)),
-            )
-            surface.blit(
-                right_render,
-                (
-                    row_rect.right - right_render.get_width() - 14,
-                    row_rect.centery - (right_render.get_height() // 2),
-                ),
+        tile_rects = self._tile_rects(surface)
+        for index, upgrade in enumerate(self.upgrades):
+            self._draw_upgrade_tile(
+                surface=surface,
+                body_font=body_font,
+                small_font=small_font,
+                rect=tile_rects[index],
+                upgrade=upgrade,
+                profile=profile,
+                selected=self.focus_area == "grid" and index == self.selected_index,
+                hovered=index == self.hover_index,
             )
 
         if self.last_message:
-            message_y = panel_top - 12
-            draw_centered_text(surface, body_font, self.last_message, message_y, (235, 215, 120))
+            message_y = panel_top - 16
+            draw_centered_text(surface, small_font, self.last_message, message_y, (235, 215, 120))
 
         self._draw_details_panel(
             surface=surface,
             body_font=body_font,
+            small_font=small_font,
             profile=profile,
             margin_x=margin_x,
             panel_top=panel_top,
@@ -156,9 +144,6 @@ class ShopScreen:
 
     def _activate_selected(self, profile: PlayerProfile) -> tuple[str | None, bool]:
         changed_profile = False
-        if self.selected_index == len(self.upgrades):
-            return "back", changed_profile
-
         selected_upgrade = self.upgrades[self.selected_index]
         result = profile.purchase_upgrade(selected_upgrade.upgrade_id)
         if result.success:
@@ -178,57 +163,89 @@ class ShopScreen:
 
         return None, changed_profile
 
-    def _list_layout(
+    def _draw_upgrade_tile(
         self,
+        *,
         surface: pygame.Surface,
-    ) -> tuple[list[int], list[pygame.Rect], int]:
-        width, height = surface.get_size()
-        margin_x = max(24, width // 20)
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+        rect: pygame.Rect,
+        upgrade: UpgradeDefinition,
+        profile: PlayerProfile,
+        selected: bool,
+        hovered: bool,
+    ) -> None:
+        level = profile.upgrades.get(upgrade.upgrade_id, 0)
+        maxed = level >= upgrade.max_level
+        cost = None if maxed else compute_upgrade_cost(upgrade, level)
+        affordable = cost is not None and profile.meta_currency >= cost
 
-        title_y = max(46, height // 11)
-        currency_y = title_y + 38
-        helper_y = currency_y + 28
+        bg = (34, 38, 46)
+        border = (88, 96, 108)
+        accent = (88, 96, 108)
+        cost_color = (214, 214, 214)
+        if maxed:
+            accent = (116, 186, 122)
+            cost_color = (166, 222, 168)
+        elif affordable:
+            accent = (216, 186, 94)
+            cost_color = (244, 221, 132)
+        else:
+            accent = (134, 144, 164)
+            cost_color = (200, 200, 200)
 
-        panel_height = max(170, min(260, height // 3))
-        panel_top = height - panel_height - 16
+        if hovered:
+            bg = (52, 58, 70)
+            border = (140, 150, 165)
+        if selected:
+            bg = (64, 72, 86)
+            border = (255, 235, 120)
 
-        list_top = helper_y + 40
-        list_bottom = panel_top - 16
-        row_height = max(44, min(52, height // 14))
+        pygame.draw.rect(surface, bg, rect, border_radius=12)
+        pygame.draw.rect(surface, border, rect, width=2, border_radius=12)
 
-        total_entries = len(self.upgrades) + 1
-        max_visible = max(1, (list_bottom - list_top) // row_height)
-        scroll_start = max(
-            0,
-            min(self.selected_index - max_visible + 1, total_entries - max_visible),
+        title_lines = wrap_text(body_font, upgrade.display_name, max_width=rect.width - 20)
+        title_y = rect.y + 18
+        for line_index, line in enumerate(title_lines[:2]):
+            rendered = body_font.render(line, True, (232, 232, 232))
+            surface.blit(
+                rendered,
+                rendered.get_rect(center=(rect.centerx, title_y + (line_index * 22))),
+            )
+
+        level_text = small_font.render(
+            f"Level {level}/{upgrade.max_level}",
+            True,
+            (176, 184, 196),
         )
-        visible_end = min(total_entries, scroll_start + max_visible)
-        visible_indexes = list(range(scroll_start, visible_end))
+        surface.blit(level_text, level_text.get_rect(center=(rect.centerx, rect.y + 68)))
 
-        row_rects: list[pygame.Rect] = []
-        for offset, _ in enumerate(visible_indexes):
-            row_y = list_top + (offset * row_height)
-            row_rects.append(pygame.Rect(margin_x, row_y, width - (margin_x * 2), row_height - 4))
+        icon_box = pygame.Rect(rect.x + 26, rect.y + 80, rect.width - 52, rect.height - 124)
+        icon = self.icon_library.get_icon(upgrade.upgrade_id, icon_box.size)
+        if icon is not None:
+            surface.blit(icon, icon.get_rect(center=icon_box.center))
+        else:
+            pygame.draw.rect(surface, (46, 52, 62), icon_box, border_radius=10)
+            pygame.draw.rect(surface, (92, 100, 114), icon_box, width=2, border_radius=10)
+            placeholder = small_font.render(
+                self._placeholder_label(upgrade.display_name),
+                True,
+                accent,
+            )
+            surface.blit(placeholder, placeholder.get_rect(center=icon_box.center))
 
-        return visible_indexes, row_rects, list_top
-
-    @staticmethod
-    def _hovered_entry(
-        mouse_position: tuple[int, int] | None,
-        visible_indexes: list[int],
-        row_rects: list[pygame.Rect],
-    ) -> int | None:
-        hovered_row = hovered_index(mouse_position, row_rects)
-        if hovered_row is None:
-            return None
-        if hovered_row >= len(visible_indexes):
-            return None
-        return visible_indexes[hovered_row]
+        if maxed:
+            cost_label = "MAXED"
+        else:
+            cost_label = f"Cost {cost}"
+        cost_render = body_font.render(cost_label, True, cost_color)
+        surface.blit(cost_render, cost_render.get_rect(center=(rect.centerx, rect.bottom - 20)))
 
     def _draw_details_panel(
         self,
         surface: pygame.Surface,
         body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
         profile: PlayerProfile,
         margin_x: int,
         panel_top: int,
@@ -236,16 +253,14 @@ class ShopScreen:
         panel_width: int,
     ) -> None:
         panel_rect = pygame.Rect(margin_x, panel_top, panel_width, panel_height)
-        pygame.draw.rect(surface, (28, 32, 38), panel_rect)
-        pygame.draw.rect(surface, (90, 96, 108), panel_rect, 2)
+        pygame.draw.rect(surface, (28, 32, 38), panel_rect, border_radius=12)
+        pygame.draw.rect(surface, (90, 96, 108), panel_rect, 2, border_radius=12)
 
-        selected_upgrade = (
-            self.upgrades[self.selected_index] if self.selected_index < len(self.upgrades) else None
-        )
+        selected_upgrade = self._selected_upgrade()
 
         lines: list[str] = []
         if selected_upgrade is None:
-            lines.append("Back to Main Menu")
+            lines.append("Back")
             lines.append("Return to the main menu.")
         else:
             level = profile.upgrades.get(selected_upgrade.upgrade_id, 0)
@@ -286,13 +301,142 @@ class ShopScreen:
                 )
             )
 
+        heading = small_font.render("Details", True, (176, 184, 196))
+        surface.blit(heading, (panel_rect.x + 12, panel_rect.y + 12))
+
         row_height = max(24, body_font.get_linesize() + 4)
         for index, line in enumerate(lines):
             rendered = body_font.render(line, True, (220, 220, 220))
-            y = panel_rect.y + 10 + (index * row_height)
+            y = panel_rect.y + 40 + (index * row_height)
             if y + row_height > panel_rect.bottom - 8:
                 break
             surface.blit(rendered, (panel_rect.x + 12, y))
+
+    def _selected_upgrade(self) -> UpgradeDefinition | None:
+        if self.focus_area != "grid":
+            return None
+        if not (0 <= self.selected_index < len(self.upgrades)):
+            return None
+        return self.upgrades[self.selected_index]
+
+    def _handle_grid_navigation(
+        self,
+        actions: MenuActions,
+        surface: pygame.Surface,
+    ) -> None:
+        if not self.upgrades:
+            self.focus_area = "back"
+            return
+
+        columns = self._tile_columns(surface)
+        current = self.selected_index
+
+        if actions.navigate_left:
+            current = max(0, current - 1)
+        if actions.navigate_right:
+            current = min(len(self.upgrades) - 1, current + 1)
+        if actions.navigate_up:
+            if current - columns >= 0:
+                current -= columns
+            else:
+                self.focus_area = "back"
+        if actions.navigate_down and current + columns < len(self.upgrades):
+            current += columns
+
+        self.selected_index = current
+
+    def _tile_columns(self, surface: pygame.Surface) -> int:
+        upgrade_count = max(1, len(self.upgrades))
+        available_width = self._grid_area_rect(surface).width
+        max_columns = min(4, upgrade_count)
+
+        for columns in range(max_columns, 0, -1):
+            gap_x = 16
+            tile_width = (available_width - (gap_x * (columns - 1))) // columns
+            if tile_width >= 136:
+                return columns
+        return 1
+
+    def _tile_rects(self, surface: pygame.Surface) -> list[pygame.Rect]:
+        area = self._grid_area_rect(surface)
+        columns = self._tile_columns(surface)
+        rows = max(1, math.ceil(len(self.upgrades) / columns))
+        gap_x = 16
+        gap_y = 16
+
+        tile_width = min(184, (area.width - (gap_x * (columns - 1))) // columns)
+        tile_height = min(178, (area.height - (gap_y * (rows - 1))) // rows)
+
+        total_width = (columns * tile_width) + ((columns - 1) * gap_x)
+        total_height = (rows * tile_height) + ((rows - 1) * gap_y)
+        start_x = area.x + max(0, (area.width - total_width) // 2)
+        start_y = area.y + max(0, (area.height - total_height) // 2)
+
+        rects: list[pygame.Rect] = []
+        for index, _ in enumerate(self.upgrades):
+            row = index // columns
+            column = index % columns
+            rects.append(
+                pygame.Rect(
+                    start_x + column * (tile_width + gap_x),
+                    start_y + row * (tile_height + gap_y),
+                    tile_width,
+                    tile_height,
+                )
+            )
+        return rects
+
+    def _grid_area_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        width, height = surface.get_size()
+        margin_x = max(24, width // 20)
+        title_y = max(46, height // 11)
+        currency_y = title_y + 38
+        helper_y = currency_y + 28
+        panel_height = max(170, min(260, height // 3))
+        panel_top = height - panel_height - 16
+        top = helper_y + 34
+        bottom = panel_top - 42
+        return pygame.Rect(
+            margin_x,
+            top,
+            width - (margin_x * 2),
+            max(120, bottom - top),
+        )
+
+    def _back_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        width, height = surface.get_size()
+        margin_x = max(24, width // 20)
+        title_y = max(46, height // 11)
+        return pygame.Rect(width - margin_x - 148, title_y - 10, 148, 40)
+
+    @staticmethod
+    def _draw_button(
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+        rect: pygame.Rect,
+        label: str,
+        *,
+        selected: bool,
+        hovered: bool,
+    ) -> None:
+        bg = (34, 38, 46)
+        border = (88, 96, 108)
+        if hovered:
+            bg = (52, 58, 70)
+            border = (140, 150, 165)
+        if selected:
+            bg = (64, 72, 86)
+            border = (255, 235, 120)
+
+        pygame.draw.rect(surface, bg, rect, border_radius=8)
+        pygame.draw.rect(surface, border, rect, width=2, border_radius=8)
+        rendered = font.render(label, True, (228, 228, 228))
+        surface.blit(rendered, rendered.get_rect(center=rect.center))
+
+    @staticmethod
+    def _placeholder_label(display_name: str) -> str:
+        initials = [token[0] for token in display_name.split() if token]
+        return "".join(initials[:3]).upper() or "?"
 
     @staticmethod
     def _format_effect_label(effect_type: str) -> str:

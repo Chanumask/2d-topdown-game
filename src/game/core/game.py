@@ -371,7 +371,13 @@ class GameApp:
                 map_count=len(self.map_options),
             )
         elif self.app_state.current_screen is AppScreen.SHOP:
-            self.shop_menu.render(self.screen, self.profile, self.title_font, self.body_font)
+            self.shop_menu.render(
+                self.screen,
+                self.profile,
+                self.title_font,
+                self.body_font,
+                self.small_font,
+            )
         elif self.app_state.current_screen is AppScreen.LOGBOOK:
             self.logbook_menu.render(
                 self.screen,

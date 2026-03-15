@@ -14,6 +14,7 @@ class UpgradeDefinition:
     upgrade_id: str
     display_name: str
     description: str
+    icon_path: str
     base_cost: int
     cost_scaling: float
     max_level: int
@@ -38,7 +39,6 @@ class RunModifiers:
     player_max_health_bonus: int = 0
     player_speed_bonus: float = 0.0
     throw_cooldown_reduction: float = 0.0
-    projectile_speed_bonus: float = 0.0
     coin_pickup_radius_bonus: float = 0.0
 
 
@@ -47,6 +47,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         upgrade_id="health_boost",
         display_name="Health Boost",
         description="Increase maximum player health.",
+        icon_path="assets/upgrades/health_boost.png",
         base_cost=80,
         cost_scaling=1.45,
         max_level=10,
@@ -57,6 +58,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         upgrade_id="quick_boots",
         display_name="Quick Boots",
         description="Increase player movement speed.",
+        icon_path="assets/upgrades/quick_boots.png",
         base_cost=90,
         cost_scaling=1.50,
         max_level=10,
@@ -67,26 +69,18 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         upgrade_id="fast_hands",
         display_name="Fast Hands",
         description="Reduce throw cooldown for faster rock throws.",
+        icon_path="assets/upgrades/fast_hands.png",
         base_cost=110,
         cost_scaling=1.55,
         max_level=10,
         effect_type="throw_cooldown_reduction",
         effect_value_per_level=0.08,
     ),
-    "high_velocity_ammo": UpgradeDefinition(
-        upgrade_id="high_velocity_ammo",
-        display_name="High Velocity Ammo",
-        description="Increase rock projectile speed.",
-        base_cost=95,
-        cost_scaling=1.50,
-        max_level=10,
-        effect_type="projectile_speed",
-        effect_value_per_level=40.0,
-    ),
     "magnet": UpgradeDefinition(
         upgrade_id="magnet",
         display_name="Magnet",
         description="Increase coin and Blessing pickup range.",
+        icon_path="assets/upgrades/magnet.png",
         base_cost=70,
         cost_scaling=1.40,
         max_level=10,
@@ -99,7 +93,6 @@ UPGRADE_RUNTIME_LABELS: dict[str, str] = {
     "health_boost": "Max Health",
     "quick_boots": "Move Speed",
     "fast_hands": "Throw Cooldown",
-    "high_velocity_ammo": "Projectile Speed",
     "magnet": "Pickup Range (Coins + Blessings)",
 }
 
@@ -200,7 +193,6 @@ def build_run_modifiers(upgrades: dict[str, int]) -> RunModifiers:
         player_max_health_bonus=int(round(_value("health_boost"))),
         player_speed_bonus=_value("quick_boots"),
         throw_cooldown_reduction=_value("fast_hands"),
-        projectile_speed_bonus=_value("high_velocity_ammo"),
         coin_pickup_radius_bonus=_value("magnet"),
     )
 
@@ -223,8 +215,6 @@ def compute_upgrade_runtime_value(
         return float(settings.player_speed + scaled)
     if upgrade_id == "fast_hands":
         return max(0.05, float(settings.throw_cooldown_seconds - scaled))
-    if upgrade_id == "high_velocity_ammo":
-        return max(1.0, float(settings.projectile_speed + scaled))
     if upgrade_id == "magnet":
         pickup_radius = max(settings.player_radius, settings.player_radius + scaled)
         # Effective pickup range is center distance threshold in circles_overlap.

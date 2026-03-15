@@ -96,10 +96,7 @@ class World:
             min_progress_per_second=self.settings.enemy_nav_min_progress_per_second,
         )
         self.combat = CombatSystem(
-            projectile_speed=max(
-                1.0,
-                self.settings.projectile_speed + self.run_modifiers.projectile_speed_bonus,
-            ),
+            projectile_speed=max(1.0, self.settings.projectile_speed),
             projectile_damage=self.settings.projectile_damage,
             projectile_ttl_seconds=self.settings.projectile_ttl_seconds,
             projectile_radius=self.settings.projectile_radius,
