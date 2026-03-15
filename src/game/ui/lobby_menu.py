@@ -1,10 +1,10 @@
 import pygame
 
 from game.input.menu_actions import MenuActions
+from game.render.characters import ANIM_IDLE, CharacterSpriteLibrary
 from game.ui.widgets import (
     build_centered_menu_rects,
     draw_centered_text,
-    draw_menu_buttons,
     hovered_index,
 )
 
@@ -13,6 +13,8 @@ class LobbyScreen:
     def __init__(self) -> None:
         self.selected_index = 0
         self.hover_index: int | None = None
+        self.character_library = CharacterSpriteLibrary()
+        self._character_preview_cache: dict[tuple[str, int], pygame.Surface | None] = {}
 
     def handle_input(
         self,
@@ -21,13 +23,13 @@ class LobbyScreen:
         body_font: pygame.font.Font,
         *,
         selected_character_name: str,
+        selected_character_id: str,
         selected_map_name: str,
         selected_ability_name: str,
         selected_variant_name: str,
     ) -> str | None:
         _, panel_start_y, row_height = self._layout_metrics(surface)
         option_labels = self._option_labels(
-            selected_character_name,
             selected_map_name,
             selected_ability_name,
             selected_variant_name,
@@ -73,6 +75,7 @@ class LobbyScreen:
         body_font: pygame.font.Font,
         *,
         selected_character_name: str,
+        selected_character_id: str,
         selected_map_name: str,
         selected_ability_name: str,
         selected_variant_name: str,
@@ -82,7 +85,6 @@ class LobbyScreen:
     ) -> None:
         title_y, panel_start_y, row_height = self._layout_metrics(surface)
         option_labels = self._option_labels(
-            selected_character_name,
             selected_map_name,
             selected_ability_name,
             selected_variant_name,
@@ -112,32 +114,106 @@ class LobbyScreen:
             (168, 168, 168),
         )
 
-        draw_menu_buttons(
-            surface=surface,
-            font=body_font,
-            options=option_labels,
-            rects=option_rects,
-            selected_index=self.selected_index,
-            hover_index=self.hover_index,
-            normal_color=(210, 210, 210),
-            selected_color=(255, 235, 120),
-        )
+        for index, option in enumerate(option_labels):
+            rect = option_rects[index]
+            is_selected = index == self.selected_index
+            is_hovered = index == self.hover_index
+            self._draw_option_button(
+                surface=surface,
+                font=body_font,
+                rect=rect,
+                label=option,
+                selected=is_selected,
+                hovered=is_hovered,
+            )
+
+            if index == 0:
+                preview = self._character_preview(
+                    selected_character_id,
+                    max_height=max(28, rect.height - 16),
+                )
+                if preview is not None:
+                    preview_rect = preview.get_rect(center=rect.center)
+                    surface.blit(preview, preview_rect)
+                else:
+                    label = body_font.render(selected_character_name, True, (225, 225, 225))
+                    surface.blit(label, label.get_rect(center=rect.center))
 
     @staticmethod
     def _option_labels(
-        selected_character_name: str,
         selected_map_name: str,
         selected_ability_name: str,
         selected_variant_name: str,
     ) -> list[str]:
         return [
-            f"Character: {selected_character_name}",
+            "Character",
             f"Map: {selected_map_name}",
             f"Ability: {selected_ability_name}",
             f"Variant: {selected_variant_name}",
             "Start Run",
             "Back to Main Menu",
         ]
+
+    def _character_preview(self, character_id: str, max_height: int) -> pygame.Surface | None:
+        cache_key = (character_id, max_height)
+        if cache_key in self._character_preview_cache:
+            return self._character_preview_cache[cache_key]
+
+        clip = self.character_library.get_animation_clip(character_id, ANIM_IDLE)
+        if clip is None or not clip.frames:
+            self._character_preview_cache[cache_key] = None
+            return None
+
+        frame = clip.frames[0]
+        width, height = frame.get_size()
+        if height <= 0:
+            self._character_preview_cache[cache_key] = None
+            return None
+
+        scale = max(0.1, min(2.5, float(max_height) / float(height)))
+        if scale <= 0.0:
+            self._character_preview_cache[cache_key] = None
+            return None
+
+        scaled = pygame.transform.scale(
+            frame,
+            (
+                max(1, int(round(width * scale))),
+                max(1, int(round(height * scale))),
+            ),
+        )
+        self._character_preview_cache[cache_key] = scaled
+        return scaled
+
+    @staticmethod
+    def _draw_option_button(
+        *,
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+        rect: pygame.Rect,
+        label: str,
+        selected: bool,
+        hovered: bool,
+    ) -> None:
+        if selected:
+            background = (64, 72, 86)
+            border = (255, 235, 120)
+            text_color = (255, 235, 120)
+        elif hovered:
+            background = (52, 58, 70)
+            border = (140, 150, 165)
+            text_color = (255, 235, 120)
+        else:
+            background = (34, 38, 46)
+            border = (88, 96, 108)
+            text_color = (210, 210, 210)
+
+        pygame.draw.rect(surface, background, rect, border_radius=8)
+        pygame.draw.rect(surface, border, rect, width=2, border_radius=8)
+
+        rendered = font.render(label, True, text_color)
+        rendered_rect = rendered.get_rect(midleft=(rect.left + 18, rect.centery))
+        surface.blit(rendered, rendered_rect)
 
     def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int]:
         height = surface.get_height()
@@ -153,7 +229,7 @@ class LobbyScreen:
                 available_height
                 // max(
                     1,
-                    len(self._option_labels("", "", "", "")),
+                    len(self._option_labels("", "", "")),
                 ),
             ),
         )
