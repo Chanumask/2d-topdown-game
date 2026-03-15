@@ -442,6 +442,8 @@ class ShopScreen:
     def _format_effect_label(effect_type: str) -> str:
         if effect_type == "coin_pickup_radius":
             return "coin and Blessing pickup range"
+        if effect_type == "projectile_damage":
+            return "rock throw damage"
         return effect_type.replace("_", " ").strip()
 
     @staticmethod

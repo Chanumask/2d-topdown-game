@@ -39,6 +39,7 @@ class RunModifiers:
     player_max_health_bonus: int = 0
     player_speed_bonus: float = 0.0
     throw_cooldown_reduction: float = 0.0
+    projectile_damage_bonus: int = 0
     coin_pickup_radius_bonus: float = 0.0
 
 
@@ -76,6 +77,17 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         effect_type="throw_cooldown_reduction",
         effect_value_per_level=0.08,
     ),
+    "heavy_rocks": UpgradeDefinition(
+        upgrade_id="heavy_rocks",
+        display_name="Heavy Rocks",
+        description="Increase basic rock throw damage.",
+        icon_path="assets/effects/Rock.png",
+        base_cost=120,
+        cost_scaling=1.60,
+        max_level=10,
+        effect_type="projectile_damage",
+        effect_value_per_level=5.0,
+    ),
     "magnet": UpgradeDefinition(
         upgrade_id="magnet",
         display_name="Magnet",
@@ -85,7 +97,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         cost_scaling=1.40,
         max_level=10,
         effect_type="coin_pickup_radius",
-        effect_value_per_level=20.0,
+        effect_value_per_level=10.0,
     ),
 }
 
@@ -93,6 +105,7 @@ UPGRADE_RUNTIME_LABELS: dict[str, str] = {
     "health_boost": "Max Health",
     "quick_boots": "Move Speed",
     "fast_hands": "Throw Cooldown",
+    "heavy_rocks": "Rock Damage",
     "magnet": "Pickup Range (Coins + Blessings)",
 }
 
@@ -193,6 +206,7 @@ def build_run_modifiers(upgrades: dict[str, int]) -> RunModifiers:
         player_max_health_bonus=int(round(_value("health_boost"))),
         player_speed_bonus=_value("quick_boots"),
         throw_cooldown_reduction=_value("fast_hands"),
+        projectile_damage_bonus=int(round(_value("heavy_rocks"))),
         coin_pickup_radius_bonus=_value("magnet"),
     )
 
@@ -215,6 +229,8 @@ def compute_upgrade_runtime_value(
         return float(settings.player_speed + scaled)
     if upgrade_id == "fast_hands":
         return max(0.05, float(settings.throw_cooldown_seconds - scaled))
+    if upgrade_id == "heavy_rocks":
+        return float(settings.projectile_damage + scaled)
     if upgrade_id == "magnet":
         pickup_radius = max(settings.player_radius, settings.player_radius + scaled)
         # Effective pickup range is center distance threshold in circles_overlap.

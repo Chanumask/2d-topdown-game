@@ -21,7 +21,7 @@ class GameSettings:
 
     projectile_radius: float = 4.0
     projectile_speed: float = 400.0
-    projectile_damage: int = 15
+    projectile_damage: int = 10
     projectile_ttl_seconds: float = 1.3
 
     coin_radius: float = 6.0
@@ -53,8 +53,8 @@ class GameSettings:
     hud_color: tuple[int, int, int] = (236, 236, 236)
 
     grid_step: int = 48
-    camera_dead_zone_width_ratio: float = 0.5
-    camera_dead_zone_height_ratio: float = 0.5
+    camera_dead_zone_width_ratio: float = 0.35
+    camera_dead_zone_height_ratio: float = 0.35
 
 
 SETTINGS = GameSettings()

@@ -30,7 +30,7 @@ FLOATING_EYE_SELF_DESTRUCT = EnemyAbilityDefinition(
     display_name="Volatile Charge",
     description="Arms on player contact or lethal damage and explodes after a delay.",
     trigger_on_player_touch=True,
-    arming_delay_seconds=1.6,
+    arming_delay_seconds=1,
     explosion_damage=50,
     explosion_radius=48.0,
     loop_effect_id=ENEMY_VFX_FLOATING_EYE_PURPLE,
@@ -51,7 +51,7 @@ FLOATING_EYE = EnemyProfile(
     passive_influences=(),
     hooks=(),
     tags=("flying",),
-    spawn_weight=1.0,
+    spawn_weight=0.2,
 )
 
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id

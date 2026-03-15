@@ -97,7 +97,10 @@ class World:
         )
         self.combat = CombatSystem(
             projectile_speed=max(1.0, self.settings.projectile_speed),
-            projectile_damage=self.settings.projectile_damage,
+            projectile_damage=max(
+                1,
+                self.settings.projectile_damage + self.run_modifiers.projectile_damage_bonus,
+            ),
             projectile_ttl_seconds=self.settings.projectile_ttl_seconds,
             projectile_radius=self.settings.projectile_radius,
         )
