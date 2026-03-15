@@ -13,6 +13,7 @@ class Enemy(Entity):
     active_ability_id: str | None = None
     active_ability_vfx_id: str | None = None
     ability_timer_seconds: float = 0.0
+    attack_cooldown_seconds: float = 0.0
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     base_radius: float = 12.0
     base_speed: float = 70.0
@@ -91,6 +92,7 @@ class Enemy(Entity):
                 "active_ability_id": self.active_ability_id,
                 "active_ability_vfx_id": self.active_ability_vfx_id,
                 "ability_timer_seconds": float(self.ability_timer_seconds),
+                "attack_cooldown_seconds": float(self.attack_cooldown_seconds),
                 "velocity": self.velocity.to_dict(),
                 "base_radius": float(self.base_radius),
                 "base_speed": float(self.base_speed),
@@ -127,6 +129,7 @@ class Enemy(Entity):
                 else None
             ),
             ability_timer_seconds=float(payload.get("ability_timer_seconds", 0.0)),
+            attack_cooldown_seconds=float(payload.get("attack_cooldown_seconds", 0.0)),
             velocity=vec2_from_payload(payload, "velocity"),
             base_radius=float(payload.get("base_radius", payload.get("radius", 12.0))),
             base_speed=float(payload.get("base_speed", payload.get("speed", 70.0))),

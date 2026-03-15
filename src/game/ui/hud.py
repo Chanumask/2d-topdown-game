@@ -40,6 +40,10 @@ class BottomPlayerHUD:
             else None
         )
 
+    def set_fonts(self, fonts: UIFonts) -> None:
+        self.label_font = fonts.hud
+        self.value_font = fonts.small
+
     def render(self, surface: pygame.Surface, snapshot: WorldSnapshot) -> None:
         player = self._resolve_player(snapshot)
         if player is None:
@@ -54,22 +58,16 @@ class BottomPlayerHUD:
         content_rect = panel_rect.inflate(-padding * 2, -padding * 2)
         block_height = content_rect.height
 
-        portrait_width = 82
-        cooldown_width = 96
-        coin_width = 138
-        hp_width = max(
-            160,
-            min(
-                260,
-                content_rect.width - portrait_width - cooldown_width - coin_width - gap * 3,
-            ),
+        show_portrait, portrait_width, hp_width, cooldown_width, coin_width = self._block_widths(
+            content_rect.width,
+            gap,
         )
-
         x = content_rect.left
-        x = self._draw_portrait(
-            surface, player, pygame.Rect(x, content_rect.top, portrait_width, block_height)
-        )
-        x += gap
+        if show_portrait:
+            x = self._draw_portrait(
+                surface, player, pygame.Rect(x, content_rect.top, portrait_width, block_height)
+            )
+            x += gap
         x = self._draw_health_bar(
             surface, pygame.Rect(x, content_rect.top, hp_width, block_height), player
         )
@@ -102,7 +100,7 @@ class BottomPlayerHUD:
     def _panel_rect(surface: pygame.Surface) -> pygame.Rect:
         screen_width, screen_height = surface.get_size()
         margin = 14
-        height = 100
+        height = max(82, min(104, screen_height // 6))
         width = min(860, screen_width - margin * 2)
         return pygame.Rect(
             (screen_width - width) // 2,
@@ -110,6 +108,48 @@ class BottomPlayerHUD:
             width,
             height,
         )
+
+    @staticmethod
+    def _block_widths(content_width: int, gap: int) -> tuple[bool, int, int, int, int]:
+        full_min = 78 + 120 + 72 + 96 + (gap * 3)
+        compact_min = 110 + 64 + 88 + (gap * 2)
+
+        if content_width >= full_min:
+            usable = content_width - (gap * 3)
+            portrait = max(72, min(92, int(usable * 0.16)))
+            cooldown = max(72, min(108, int(usable * 0.17)))
+            coin = max(96, min(160, int(usable * 0.24)))
+            hp = usable - portrait - cooldown - coin
+            if hp < 120:
+                deficit = 120 - hp
+                shift_from_coin = min(deficit, max(0, coin - 96))
+                coin -= shift_from_coin
+                hp += shift_from_coin
+            return True, portrait, hp, cooldown, coin
+
+        if content_width >= compact_min:
+            usable = content_width - (gap * 2)
+            cooldown = max(64, min(100, int(usable * 0.22)))
+            coin = max(88, min(150, int(usable * 0.30)))
+            hp = usable - cooldown - coin
+            if hp < 110:
+                deficit = 110 - hp
+                shift_from_coin = min(deficit, max(0, coin - 72))
+                coin -= shift_from_coin
+                hp += shift_from_coin
+                deficit -= shift_from_coin
+                if deficit > 0:
+                    shift_from_cooldown = min(deficit, max(0, cooldown - 54))
+                    cooldown -= shift_from_cooldown
+                    hp += shift_from_cooldown
+            return False, 0, hp, cooldown, coin
+
+        # Extremely narrow fallback: keep all blocks visible with reduced widths.
+        usable = max(120, content_width - (gap * 2))
+        cooldown = max(54, int(usable * 0.24))
+        coin = max(72, int(usable * 0.30))
+        hp = max(72, usable - cooldown - coin)
+        return False, 0, hp, cooldown, coin
 
     def _draw_portrait(
         self,
@@ -305,12 +345,15 @@ class TopRunStatsHUD:
     def __init__(self, fonts: UIFonts) -> None:
         self.value_font = fonts.hud
 
+    def set_fonts(self, fonts: UIFonts) -> None:
+        self.value_font = fonts.hud
+
     def render(self, surface: pygame.Surface, snapshot: WorldSnapshot) -> None:
         panel_rect = self._panel_rect(surface)
         pygame.draw.rect(surface, (16, 18, 22), panel_rect, border_radius=10)
         pygame.draw.rect(surface, (86, 96, 110), panel_rect, width=2, border_radius=10)
 
-        stats_line = self._build_stats_line(snapshot)
+        stats_line = self._build_stats_line(snapshot, panel_rect.width, self.value_font)
         rendered = self.value_font.render(stats_line, True, (230, 232, 238))
         surface.blit(
             rendered,
@@ -324,7 +367,12 @@ class TopRunStatsHUD:
         height = 44
         return pygame.Rect((surface.get_width() - width) // 2, margin, width, height)
 
-    def _build_stats_line(self, snapshot: WorldSnapshot) -> str:
+    def _build_stats_line(
+        self,
+        snapshot: WorldSnapshot,
+        panel_width: int,
+        font: pygame.font.Font,
+    ) -> str:
         difficulty_factor = self._read_float(snapshot.difficulty.get("factor"), default=1.0)
         spawn_interval = self._read_float(
             snapshot.difficulty.get("spawn_interval_seconds"),
@@ -334,13 +382,26 @@ class TopRunStatsHUD:
         enemies_alive = len(snapshot.enemies)
         kills = self._read_int(snapshot.score.get("enemies_killed_total"), default=0)
 
-        return (
+        full = (
             f"Difficulty x{difficulty_factor:.2f} | "
             f"Time {self._format_time(elapsed)} | "
             f"Enemies Alive {enemies_alive} | "
             f"Kills {kills} | "
             f"Spawn {spawn_interval:.2f}s"
         )
+        if font.size(full)[0] <= panel_width - 20:
+            return full
+
+        compact = (
+            f"Diff x{difficulty_factor:.2f} | "
+            f"Time {self._format_time(elapsed)} | "
+            f"Alive {enemies_alive} | "
+            f"Kills {kills}"
+        )
+        if font.size(compact)[0] <= panel_width - 20:
+            return compact
+
+        return f"x{difficulty_factor:.2f}  {self._format_time(elapsed)}  A{enemies_alive}  K{kills}"
 
     @staticmethod
     def _format_time(total_seconds: float) -> str:

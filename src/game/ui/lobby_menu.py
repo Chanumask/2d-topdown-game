@@ -31,7 +31,7 @@ class LobbyScreen:
             options=option_labels,
             start_y=panel_start_y,
             row_height=row_height,
-            min_width=max(340, surface.get_width() // 3),
+            min_width=max(220, min(460, surface.get_width() - 56)),
         )
 
         hovered = hovered_index(actions.mouse_position, option_rects)
@@ -78,7 +78,7 @@ class LobbyScreen:
             options=option_labels,
             start_y=panel_start_y,
             row_height=row_height,
-            min_width=max(340, surface.get_width() // 3),
+            min_width=max(220, min(460, surface.get_width() - 56)),
         )
 
         draw_centered_text(surface, title_font, "Lobby", title_y, (245, 245, 245))
@@ -86,14 +86,14 @@ class LobbyScreen:
             surface,
             body_font,
             f"Characters: {character_count}  |  Maps: {map_count}",
-            title_y + 48,
+            title_y + max(30, row_height - 6),
             (188, 188, 188),
         )
         draw_centered_text(
             surface,
             body_font,
             "Use Left/Right to change selections.",
-            title_y + 80,
+            title_y + max(56, row_height + 18),
             (168, 168, 168),
         )
 
@@ -119,9 +119,13 @@ class LobbyScreen:
 
     def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int]:
         height = surface.get_height()
-        title_y = max(70, height // 7)
-        row_height = max(50, min(72, height // 10))
-        panel_start_y = max(title_y + 150, height // 3)
+        top_padding = max(16, height // 20)
+        title_y = top_padding + max(26, height // 11)
+        panel_top = title_y + max(96, height // 5)
+        bottom_padding = max(20, height // 14)
+        available_height = max(120, height - panel_top - bottom_padding)
+        row_height = max(34, min(72, available_height // max(1, len(self._option_labels("", "")))))
+        panel_start_y = panel_top + (row_height // 2)
         return title_y, panel_start_y, row_height
 
     @staticmethod

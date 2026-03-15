@@ -29,7 +29,7 @@ class PauseMenuScreen:
             options=self.options,
             start_y=menu_start,
             row_height=row_height,
-            min_width=max(300, surface.get_width() // 3),
+            min_width=max(220, min(460, surface.get_width() - 56)),
         )
         hovered = hovered_index(actions.mouse_position, option_rects)
         self.hover_index = hovered
@@ -74,7 +74,7 @@ class PauseMenuScreen:
             options=dynamic_options,
             start_y=menu_start,
             row_height=row_height,
-            min_width=max(300, surface.get_width() // 3),
+            min_width=max(220, min(460, surface.get_width() - 56)),
         )
 
         draw_centered_text(surface, title_font, "Paused", title_y, (250, 250, 250))
@@ -89,7 +89,7 @@ class PauseMenuScreen:
             surface,
             body_font,
             "All players must press Ready to resume countdown.",
-            info_y + 32,
+            info_y + max(24, row_height - 10),
             (190, 190, 190),
         )
 
@@ -106,10 +106,14 @@ class PauseMenuScreen:
 
     def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int, int]:
         height = surface.get_height()
-        title_y = max(86, height // 5)
-        info_y = title_y + 54
-        row_height = max(46, min(64, height // 10))
-        menu_start = info_y + 110
+        top_padding = max(16, height // 18)
+        title_y = top_padding + max(28, height // 10)
+        info_y = title_y + max(36, height // 14)
+        menu_top = info_y + max(50, height // 9)
+        bottom_padding = max(20, height // 14)
+        available_height = max(120, height - menu_top - bottom_padding)
+        row_height = max(34, min(64, available_height // max(1, len(self.options))))
+        menu_start = menu_top + (row_height // 2)
         return title_y, info_y, menu_start, row_height
 
     def _command_for_selection(self) -> str | None:

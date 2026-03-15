@@ -28,7 +28,7 @@ class MainMenuScreen:
             options=self.options,
             start_y=start_y,
             row_height=row_height,
-            min_width=max(280, surface.get_width() // 4),
+            min_width=max(180, min(340, surface.get_width() - 48)),
         )
         hovered = hovered_index(actions.mouse_position, option_rects)
         self.hover_index = hovered
@@ -62,7 +62,7 @@ class MainMenuScreen:
             options=self.options,
             start_y=start_y,
             row_height=row_height,
-            min_width=max(280, surface.get_width() // 4),
+            min_width=max(180, min(340, surface.get_width() - 48)),
         )
 
         draw_centered_text(surface, title_font, "Runner2D Survival", title_y, (245, 245, 245))
@@ -70,7 +70,7 @@ class MainMenuScreen:
             surface=surface,
             font=body_font,
             text="Top-down survival prototype",
-            y=title_y + 48,
+            y=title_y + max(30, row_height - 4),
             color=(175, 175, 175),
         )
 
@@ -87,10 +87,13 @@ class MainMenuScreen:
 
     def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int]:
         height = surface.get_height()
-        title_y = max(72, height // 6)
-        row_height = max(46, min(68, height // 10))
-        menu_block_height = (len(self.options) - 1) * row_height
-        start_y = max(title_y + 110, (height - menu_block_height) // 2)
+        top_padding = max(16, height // 20)
+        title_y = top_padding + max(28, height // 10)
+        menu_top = title_y + max(64, height // 7)
+        bottom_padding = max(20, height // 14)
+        available_height = max(140, height - menu_top - bottom_padding)
+        row_height = max(34, min(68, available_height // max(1, len(self.options))))
+        start_y = menu_top + (row_height // 2)
         return title_y, start_y, row_height
 
     def _command_for_selection(self) -> str | None:

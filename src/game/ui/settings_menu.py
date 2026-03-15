@@ -90,13 +90,13 @@ class SettingsScreen:
     ) -> None:
         row_rects, control_rects = self._layout(surface)
 
-        title_y = max(72, surface.get_height() // 7)
+        title_y = max(52, surface.get_height() // 8)
         draw_centered_text(surface, title_font, "Settings", title_y, (245, 245, 245))
         draw_centered_text(
             surface,
             body_font,
             "Keyboard: arrows + enter | Mouse: hover + click",
-            title_y + 42,
+            title_y + max(28, surface.get_height() // 18),
             (175, 175, 175),
         )
 
@@ -155,12 +155,25 @@ class SettingsScreen:
         surface: pygame.Surface,
     ) -> tuple[list[pygame.Rect], dict[int, dict[str, pygame.Rect]]]:
         width, height = surface.get_size()
-        panel_width = min(860, max(540, width - 120))
+        side_margin = max(16, width // 24)
+        panel_width = min(max(320, int(width * 0.82)), width - (side_margin * 2))
         panel_x = (width - panel_width) // 2
-        title_y = max(72, height // 7)
-        row_start_y = title_y + 88
-        row_height = max(48, min(62, height // 10))
-        row_gap = 12
+        title_y = max(52, height // 8)
+        row_start_y = title_y + max(58, height // 8)
+        bottom_margin = max(18, height // 18)
+        preferred_gap = max(6, min(12, height // 68))
+        available_height = max(120, height - row_start_y - bottom_margin)
+
+        row_gap = preferred_gap
+        total_gap = row_gap * max(0, len(self.items) - 1)
+        row_height = max(34, min(62, (available_height - total_gap) // max(1, len(self.items))))
+        if row_height <= 36:
+            row_gap = max(4, min(8, preferred_gap))
+            total_gap = row_gap * max(0, len(self.items) - 1)
+            row_height = max(
+                30,
+                min(62, (available_height - total_gap) // max(1, len(self.items))),
+            )
 
         row_rects: list[pygame.Rect] = []
         control_rects: dict[int, dict[str, pygame.Rect]] = {}
@@ -169,7 +182,7 @@ class SettingsScreen:
             row_rect = pygame.Rect(panel_x, row_y, panel_width, row_height)
             row_rects.append(row_rect)
 
-            control_width = max(220, panel_width // 3)
+            control_width = max(140, min(280, int(panel_width * 0.34)))
             control_x = row_rect.right - control_width - 14
             control_y = row_rect.y + 8
             control_height = row_rect.height - 16

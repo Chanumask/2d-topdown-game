@@ -10,6 +10,7 @@ from game.core.enemy_catalog import list_enemy_profiles
 from game.core.profile import PlayerProfile
 from game.input.menu_actions import MenuActions
 from game.render.blessings import BlessingSpriteLibrary
+from game.render.effects import EffectClipLibrary
 from game.render.enemies import EnemySpriteLibrary
 from game.render.spritesheet import pixelart_upscale_surface
 from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
@@ -22,6 +23,12 @@ TAB_BLESSINGS = "blessings"
 class TabDefinition:
     tab_id: str
     label: str
+
+
+@dataclass(slots=True)
+class TimedEffectAnimationState:
+    frame_index: int = 0
+    frame_progress_seconds: float = 0.0
 
 
 class LogbookScreen:
@@ -44,9 +51,14 @@ class LogbookScreen:
         self.hover_next_entry = False
         self.enemy_library = EnemySpriteLibrary()
         self.blessing_library = BlessingSpriteLibrary(world_icon_scale=4)
+        self.effect_library = EffectClipLibrary()
         self.enemy_profiles = list_enemy_profiles()
         self.blessings = list_blessings()
         self._enemy_preview_cache: dict[str, pygame.Surface | None] = {}
+        self._ability_effect_animation_states: dict[
+            tuple[str, str, str], TimedEffectAnimationState
+        ] = {}
+        self._last_render_time_seconds: float | None = None
 
     def selection_signature(self) -> tuple[str, int, int | None, str | None]:
         active_tab = self._active_tab_id()
@@ -178,6 +190,13 @@ class LogbookScreen:
         body_font: pygame.font.Font,
         small_font: pygame.font.Font,
     ) -> None:
+        render_now_seconds = pygame.time.get_ticks() / 1000.0
+        if self._last_render_time_seconds is None:
+            render_dt = 0.0
+        else:
+            render_dt = max(0.0, min(0.1, render_now_seconds - self._last_render_time_seconds))
+        self._last_render_time_seconds = render_now_seconds
+
         width, _ = surface.get_size()
         draw_centered_text(surface, title_font, "Logbook", 60, (245, 245, 245))
         draw_centered_text(
@@ -192,13 +211,15 @@ class LogbookScreen:
         self._draw_tabs(surface, body_font)
 
         if self.detail_entry_id is None:
+            self._ability_effect_animation_states.clear()
             if active_tab == TAB_ENEMIES:
                 self._draw_enemy_overview(surface, profile, body_font, small_font)
             else:
                 self._draw_blessing_overview(surface, profile, body_font, small_font)
         elif active_tab == TAB_ENEMIES:
-            self._draw_enemy_detail(surface, profile, body_font, small_font)
+            self._draw_enemy_detail(surface, profile, body_font, small_font, render_dt)
         else:
+            self._ability_effect_animation_states.clear()
             self._draw_blessing_detail(surface, profile, body_font, small_font)
 
         back_rect = self._back_rect(surface)
@@ -291,6 +312,7 @@ class LogbookScreen:
         profile: PlayerProfile,
         body_font: pygame.font.Font,
         small_font: pygame.font.Font,
+        render_dt: float,
     ) -> None:
         if self.detail_entry_id is None:
             return
@@ -302,25 +324,128 @@ class LogbookScreen:
             self.detail_entry_id = None
             return
 
-        self._draw_detail_panel(
+        self._draw_enemy_detail_panel(
             surface=surface,
             body_font=body_font,
             small_font=small_font,
-            title=enemy.display_name,
-            sprite=self._enemy_preview(enemy.profile_id),
-            stat_lines=[
-                f"Tier: {enemy.tier.value.title()}",
-                f"Tags: {', '.join(enemy.tags) if enemy.tags else 'None'}",
-                f"Max HP: {enemy.stats.max_health}",
-                f"Speed: {enemy.stats.speed:.0f}",
-                f"Touch Damage: {enemy.stats.touch_damage}",
-                f"Coin Drop: {enemy.stats.coin_drop_value}",
-                f"Radius: {enemy.stats.radius:.0f}",
-            ],
-            detail_lines=self._enemy_ability_detail_lines(enemy, body_font),
-            detail_title="Abilities",
+            enemy=enemy,
+            render_dt=render_dt,
         )
         self._draw_detail_nav(surface, body_font, profile)
+
+    def _draw_enemy_detail_panel(
+        self,
+        *,
+        surface: pygame.Surface,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+        enemy: EnemyProfile,
+        render_dt: float,
+    ) -> None:
+        panel_rect = self._detail_panel_rect(surface)
+        pygame.draw.rect(surface, (30, 34, 42), panel_rect, border_radius=12)
+        pygame.draw.rect(surface, (108, 116, 128), panel_rect, width=2, border_radius=12)
+
+        title_render = body_font.render(enemy.display_name, True, (235, 235, 235))
+        surface.blit(title_render, (panel_rect.x + 28, panel_rect.y + 24))
+
+        sprite = self._enemy_preview(enemy.profile_id)
+        if sprite is not None:
+            sprite_rect = sprite.get_rect(center=(panel_rect.x + 116, panel_rect.y + 118))
+            surface.blit(sprite, sprite_rect)
+
+        left_x = panel_rect.x + 28
+        stats_y = panel_rect.y + 190
+        stats_title = small_font.render("Stats", True, (180, 180, 180))
+        surface.blit(stats_title, (left_x, stats_y))
+        stat_lines = [
+            f"Tier: {enemy.tier.value.title()}",
+            f"Tags: {', '.join(enemy.tags) if enemy.tags else 'None'}",
+            f"Max HP: {enemy.stats.max_health}",
+            f"Speed: {enemy.stats.speed:.0f}",
+            f"Touch Damage: {enemy.stats.touch_damage}",
+            f"Coin Drop: {enemy.stats.coin_drop_value}",
+        ]
+        for index, line in enumerate(stat_lines):
+            rendered = body_font.render(line, True, (225, 225, 225))
+            surface.blit(rendered, (left_x, stats_y + 30 + (index * 30)))
+
+        right_x = panel_rect.x + max(240, panel_rect.width // 2)
+        detail_width = panel_rect.right - right_x - 16
+        detail_title_render = small_font.render("Abilities", True, (180, 180, 180))
+        surface.blit(detail_title_render, (right_x, panel_rect.y + 78))
+
+        content_y = panel_rect.y + 108
+        content_bottom = panel_rect.bottom - 16
+        active_effect_keys: set[tuple[str, str, str]] = set()
+
+        if not enemy.abilities:
+            empty = body_font.render("No special abilities recorded.", True, (220, 220, 220))
+            surface.blit(empty, (right_x, content_y))
+            self._ability_effect_animation_states.clear()
+            return
+
+        for ability in enemy.abilities:
+            if content_y + body_font.get_linesize() > content_bottom:
+                break
+
+            ability_name = body_font.render(ability.display_name, True, (225, 225, 225))
+            surface.blit(ability_name, (right_x, content_y))
+            content_y += 24
+
+            description_lines = wrap_text(
+                body_font,
+                ability.description or "No description recorded.",
+                max_width=max(120, detail_width),
+            )
+            for line in description_lines:
+                if content_y + body_font.get_linesize() > content_bottom:
+                    break
+                rendered = body_font.render(line, True, (220, 220, 220))
+                surface.blit(rendered, (right_x, content_y))
+                content_y += 24
+
+            effect_ids = [
+                effect_id
+                for effect_id in (
+                    ability.loop_effect_id,
+                    ability.fire_effect_id,
+                    ability.projectile_effect_id,
+                )
+                if effect_id
+            ]
+            deduped_effect_ids = list(dict.fromkeys(effect_ids))
+
+            for effect_id in deduped_effect_ids:
+                clip = self.effect_library.get_clip(effect_id)
+                if clip is None or not clip.frames:
+                    continue
+                key = (enemy.profile_id, ability.ability_id, effect_id)
+                active_effect_keys.add(key)
+                state = self._ability_effect_animation_states.setdefault(
+                    key,
+                    TimedEffectAnimationState(),
+                )
+                self._advance_looping_animation(
+                    state,
+                    fps=float(clip.fps),
+                    frame_count=len(clip.frames),
+                    render_dt=render_dt,
+                )
+                frame = clip.frames[state.frame_index]
+                frame_rect = frame.get_rect(topleft=(right_x, content_y + 4))
+                if frame_rect.bottom > content_bottom:
+                    break
+                surface.blit(frame, frame_rect)
+                content_y = frame_rect.bottom + 10
+
+            content_y += 8
+
+        self._ability_effect_animation_states = {
+            key: state
+            for key, state in self._ability_effect_animation_states.items()
+            if key in active_effect_keys
+        }
 
     def _draw_blessing_detail(
         self,
@@ -592,6 +717,23 @@ class LogbookScreen:
             )
             lines.extend(description_lines)
         return lines
+
+    @staticmethod
+    def _advance_looping_animation(
+        state: TimedEffectAnimationState,
+        *,
+        fps: float,
+        frame_count: int,
+        render_dt: float,
+    ) -> None:
+        if frame_count <= 0:
+            return
+
+        frame_duration = 1.0 / max(0.01, fps)
+        state.frame_progress_seconds += max(0.0, render_dt)
+        while state.frame_progress_seconds >= frame_duration:
+            state.frame_progress_seconds -= frame_duration
+            state.frame_index = (state.frame_index + 1) % frame_count
 
     def _discovered_entry_ids_for_active_tab(self, profile: PlayerProfile) -> list[str]:
         if self._active_tab_id() == TAB_ENEMIES:

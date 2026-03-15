@@ -1,6 +1,8 @@
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
+    ENEMY_ABILITY_RANGED_SHOT,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
+    ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
     EnemyAbilityDefinition,
     EnemyProfile,
     EnemyStats,
@@ -54,11 +56,43 @@ FLOATING_EYE = EnemyProfile(
     spawn_weight=0.2,
 )
 
+WARPED_SKULL_RANGED_SHOT = EnemyAbilityDefinition(
+    ability_id=ENEMY_ABILITY_RANGED_SHOT,
+    display_name="Warp Bolt",
+    description="Fires a straight projectile toward players within range.",
+    attack_interval_seconds=4.0,
+    attack_range=250.0,
+    projectile_speed=200.0,
+    projectile_damage=25,
+    projectile_ttl_seconds=1.25,
+    projectile_radius=4.0,
+    projectile_effect_id=ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
+)
+
+WARPED_SKULL = EnemyProfile(
+    profile_id="warped_skull",
+    display_name="Warped Skull",
+    tier=EnemyTier.NORMAL,
+    stats=EnemyStats(
+        max_health=15,
+        speed=66.0,
+        touch_damage=10,
+        coin_drop_value=1,
+        radius=11.0,
+    ),
+    abilities=(WARPED_SKULL_RANGED_SHOT,),
+    passive_influences=(),
+    hooks=(),
+    tags=("flying", "ranged"),
+    spawn_weight=0.1,
+)
+
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id
 
 ENEMY_PROFILES: dict[str, EnemyProfile] = {
     CRIMSON_IMP.profile_id: CRIMSON_IMP,
     FLOATING_EYE.profile_id: FLOATING_EYE,
+    WARPED_SKULL.profile_id: WARPED_SKULL,
 }
 
 

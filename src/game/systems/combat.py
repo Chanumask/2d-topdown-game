@@ -51,11 +51,14 @@ class CombatSystem:
 
     def resolve(self, world: World) -> None:
         self._projectile_hits_enemy(world)
+        self._projectile_hits_player(world)
         self._enemy_contacts_player(world)
 
     def _projectile_hits_enemy(self, world: World) -> None:
         for projectile in world.projectiles.values():
             if not projectile.alive:
+                continue
+            if projectile.source_faction != "player":
                 continue
 
             for enemy in world.enemies.values():
@@ -77,6 +80,28 @@ class CombatSystem:
                         enemy,
                         killer_player_id=projectile.owner_player_id or None,
                     )
+                break
+
+    def _projectile_hits_player(self, world: World) -> None:
+        for projectile in world.projectiles.values():
+            if not projectile.alive:
+                continue
+            if projectile.source_faction != "enemy":
+                continue
+
+            for player in world.players.values():
+                if not player.alive:
+                    continue
+                if not circles_overlap(
+                    projectile.position,
+                    projectile.radius,
+                    player.position,
+                    player.radius,
+                ):
+                    continue
+
+                player.take_damage(projectile.damage)
+                projectile.alive = False
                 break
 
     def _enemy_contacts_player(self, world: World) -> None:

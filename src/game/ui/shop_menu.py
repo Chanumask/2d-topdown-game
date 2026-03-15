@@ -79,15 +79,10 @@ class ShopScreen:
         body_font: pygame.font.Font,
         small_font: pygame.font.Font,
     ) -> None:
-        width, height = surface.get_size()
-        margin_x = max(24, width // 20)
-
-        title_y = max(46, height // 11)
-        currency_y = title_y + 38
-        helper_y = currency_y + 28
-
-        panel_height = max(170, min(260, height // 3))
-        panel_top = height - panel_height - 16
+        width, _ = surface.get_size()
+        margin_x, title_y, currency_y, helper_y, panel_top, panel_height = self._header_layout(
+            surface
+        )
 
         draw_centered_text(surface, title_font, "Shop", title_y, (245, 245, 245))
         draw_centered_text(
@@ -204,23 +199,49 @@ class ShopScreen:
         pygame.draw.rect(surface, bg, rect, border_radius=12)
         pygame.draw.rect(surface, border, rect, width=2, border_radius=12)
 
+        compact_tile = rect.height < 150 or rect.width < 190
+        if compact_tile:
+            self._draw_compact_upgrade_tile(
+                surface=surface,
+                body_font=body_font,
+                small_font=small_font,
+                rect=rect,
+                upgrade=upgrade,
+                level=level,
+                maxed=maxed,
+                cost=cost,
+                cost_color=cost_color,
+            )
+            return
+
         title_lines = wrap_text(body_font, upgrade.display_name, max_width=rect.width - 20)
-        title_y = rect.y + 18
+        title_y = rect.y + max(10, rect.height // 14)
         for line_index, line in enumerate(title_lines[:2]):
             rendered = body_font.render(line, True, (232, 232, 232))
             surface.blit(
                 rendered,
-                rendered.get_rect(center=(rect.centerx, title_y + (line_index * 22))),
+                rendered.get_rect(center=(rect.centerx, title_y + (line_index * 20))),
             )
 
+        level_y = rect.y + max(36, min(68, rect.height // 3))
         level_text = small_font.render(
             f"Level {level}/{upgrade.max_level}",
             True,
             (176, 184, 196),
         )
-        surface.blit(level_text, level_text.get_rect(center=(rect.centerx, rect.y + 68)))
+        surface.blit(level_text, level_text.get_rect(center=(rect.centerx, level_y)))
 
-        icon_box = pygame.Rect(rect.x + 26, rect.y + 80, rect.width - 52, rect.height - 124)
+        cost_y = rect.bottom - max(16, rect.height // 10)
+        icon_side_padding = max(12, rect.width // 7)
+        icon_top = level_y + max(12, rect.height // 14)
+        icon_bottom = cost_y - max(12, rect.height // 12)
+        icon_height = max(12, icon_bottom - icon_top)
+        icon_box = pygame.Rect(
+            rect.x + icon_side_padding,
+            icon_top,
+            max(12, rect.width - (icon_side_padding * 2)),
+            icon_height,
+        )
         icon = self.icon_library.get_icon(upgrade.upgrade_id, icon_box.size)
         if icon is not None:
             surface.blit(icon, icon.get_rect(center=icon_box.center))
@@ -239,7 +260,58 @@ class ShopScreen:
         else:
             cost_label = f"Cost {cost}"
         cost_render = body_font.render(cost_label, True, cost_color)
-        surface.blit(cost_render, cost_render.get_rect(center=(rect.centerx, rect.bottom - 20)))
+        surface.blit(cost_render, cost_render.get_rect(center=(rect.centerx, cost_y)))
+
+    def _draw_compact_upgrade_tile(
+        self,
+        *,
+        surface: pygame.Surface,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+        rect: pygame.Rect,
+        upgrade: UpgradeDefinition,
+        level: int,
+        maxed: bool,
+        cost: int | None,
+        cost_color: tuple[int, int, int],
+    ) -> None:
+        icon_side = max(16, rect.height - 16)
+        icon_side = min(icon_side, max(24, min(48, rect.width // 3)))
+        text_left_padding = 8
+        text_right_padding = 8
+        tentative_text_left = rect.x + text_left_padding + icon_side + 8
+        available_text_width = (rect.right - text_right_padding) - tentative_text_left
+        if available_text_width < 74:
+            icon_side = max(24, min(icon_side, 34))
+        icon_box = pygame.Rect(
+            rect.x + text_left_padding,
+            rect.y + (rect.height - icon_side) // 2,
+            icon_side,
+            icon_side,
+        )
+        icon = self.icon_library.get_icon(upgrade.upgrade_id, icon_box.size)
+        if icon is not None:
+            surface.blit(icon, icon.get_rect(center=icon_box.center))
+
+        text_left = icon_box.right + 8
+        text_right = rect.right - text_right_padding
+        name_width = max(60, text_right - text_left)
+        name_lines = wrap_text(small_font, upgrade.display_name, max_width=name_width)
+        name_y = rect.y + 8
+        for line in name_lines[:2]:
+            title_render = small_font.render(line, True, (232, 232, 232))
+            surface.blit(title_render, (text_left, name_y))
+            name_y += max(14, small_font.get_linesize() - 2)
+
+        cost_label = "MAXED" if maxed else f"Cost {cost}"
+        cost_render = small_font.render(cost_label, True, cost_color)
+        cost_x = max(text_left, text_right - cost_render.get_width())
+        cost_y = rect.y + max(8, rect.height // 2 - cost_render.get_height() // 2)
+        surface.blit(cost_render, (cost_x, cost_y))
+
+        level_render = small_font.render(f"Lv {level}/{upgrade.max_level}", True, (176, 184, 196))
+        level_y = rect.bottom - level_render.get_height() - 6
+        surface.blit(level_render, (text_left, level_y))
 
     def _draw_details_panel(
         self,
@@ -347,13 +419,18 @@ class ShopScreen:
 
     def _tile_columns(self, surface: pygame.Surface) -> int:
         upgrade_count = max(1, len(self.upgrades))
-        available_width = self._grid_area_rect(surface).width
+        area = self._grid_area_rect(surface)
+        available_width = area.width
+        available_height = area.height
         max_columns = min(4, upgrade_count)
 
         for columns in range(max_columns, 0, -1):
             gap_x = 16
+            gap_y = 16
             tile_width = (available_width - (gap_x * (columns - 1))) // columns
-            if tile_width >= 136:
+            rows = max(1, math.ceil(upgrade_count / columns))
+            tile_height = (available_height - (gap_y * (rows - 1))) // rows
+            if tile_width >= 116 and tile_height >= 96:
                 return columns
         return 1
 
@@ -363,6 +440,10 @@ class ShopScreen:
         rows = max(1, math.ceil(len(self.upgrades) / columns))
         gap_x = 16
         gap_y = 16
+        if area.height < 360:
+            gap_y = 10
+        if area.width < 720:
+            gap_x = 10
 
         tile_width = min(184, (area.width - (gap_x * (columns - 1))) // columns)
         tile_height = min(178, (area.height - (gap_y * (rows - 1))) // rows)
@@ -387,15 +468,10 @@ class ShopScreen:
         return rects
 
     def _grid_area_rect(self, surface: pygame.Surface) -> pygame.Rect:
-        width, height = surface.get_size()
-        margin_x = max(24, width // 20)
-        title_y = max(46, height // 11)
-        currency_y = title_y + 38
-        helper_y = currency_y + 28
-        panel_height = max(170, min(260, height // 3))
-        panel_top = height - panel_height - 16
-        top = helper_y + 34
-        bottom = panel_top - 42
+        width, _ = surface.get_size()
+        margin_x, _, _, helper_y, panel_top, _ = self._header_layout(surface)
+        top = helper_y + 22
+        bottom = panel_top - 18
         return pygame.Rect(
             margin_x,
             top,
@@ -404,10 +480,21 @@ class ShopScreen:
         )
 
     def _back_rect(self, surface: pygame.Surface) -> pygame.Rect:
+        width, _ = surface.get_size()
+        margin_x, title_y, _, _, _, _ = self._header_layout(surface)
+        back_width = max(120, min(160, width // 5))
+        return pygame.Rect(width - margin_x - back_width, title_y - 12, back_width, 40)
+
+    @staticmethod
+    def _header_layout(surface: pygame.Surface) -> tuple[int, int, int, int, int, int]:
         width, height = surface.get_size()
-        margin_x = max(24, width // 20)
-        title_y = max(46, height // 11)
-        return pygame.Rect(width - margin_x - 148, title_y - 10, 148, 40)
+        margin_x = max(20, width // 22)
+        title_y = max(34, height // 12)
+        currency_y = title_y + max(24, min(40, height // 14))
+        helper_y = currency_y + max(18, min(30, height // 20))
+        panel_height = max(112, min(220, int(height * 0.28)))
+        panel_top = height - panel_height - max(12, height // 40)
+        return margin_x, title_y, currency_y, helper_y, panel_top, panel_height
 
     @staticmethod
     def _draw_button(

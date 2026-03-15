@@ -54,7 +54,7 @@ class GameSettings:
 
     grid_step: int = 48
     camera_dead_zone_width_ratio: float = 0.35
-    camera_dead_zone_height_ratio: float = 0.35
+    camera_dead_zone_height_ratio: float = 0.30
 
 
 SETTINGS = GameSettings()

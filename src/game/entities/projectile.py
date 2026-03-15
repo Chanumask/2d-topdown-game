@@ -6,6 +6,8 @@ from game.entities.entity import Entity, Vec2, vec2_from_payload
 @dataclass(slots=True)
 class Projectile(Entity):
     owner_player_id: str = ""
+    source_faction: str = "player"
+    projectile_effect_id: str | None = None
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     damage: int = 15
     ttl_seconds: float = 1.3
@@ -22,6 +24,8 @@ class Projectile(Entity):
         payload.update(
             {
                 "owner_player_id": self.owner_player_id,
+                "source_faction": self.source_faction,
+                "projectile_effect_id": self.projectile_effect_id,
                 "velocity": self.velocity.to_dict(),
                 "damage": self.damage,
                 "ttl_seconds": float(self.ttl_seconds),
@@ -37,6 +41,12 @@ class Projectile(Entity):
             radius=float(payload.get("radius", 0.0)),
             alive=bool(payload.get("alive", True)),
             owner_player_id=str(payload.get("owner_player_id", "")),
+            source_faction=str(payload.get("source_faction", "player")),
+            projectile_effect_id=(
+                str(payload.get("projectile_effect_id"))
+                if payload.get("projectile_effect_id") not in (None, "")
+                else None
+            ),
             velocity=vec2_from_payload(payload, "velocity"),
             damage=int(payload.get("damage", 15)),
             ttl_seconds=float(payload.get("ttl_seconds", 1.3)),

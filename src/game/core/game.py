@@ -24,7 +24,7 @@ from game.input.input_handler import InputHandler
 from game.input.menu_input_handler import MenuInputHandler
 from game.input.session_actions import SessionActions
 from game.render.camera import Camera
-from game.render.fonts import UIFonts, load_ui_fonts
+from game.render.fonts import UIFonts, load_ui_fonts, scale_ui_fonts
 from game.render.renderer import Renderer
 from game.settings import SETTINGS
 from game.ui import (
@@ -50,6 +50,9 @@ MENU_MUSIC_SCREENS = frozenset(
 
 
 class GameApp:
+    _MIN_WINDOWED_WIDTH = 960
+    _MIN_WINDOWED_HEIGHT = 600
+
     def __init__(self) -> None:
         self.local_player_id = "player-1"
 
@@ -58,12 +61,14 @@ class GameApp:
         self.profile = self.profile_store.load_or_create_profile()
         self.audio = AudioManager()
         self.audio.apply_settings(self.profile.settings)
-        self._windowed_size = (SETTINGS.screen_width, SETTINGS.screen_height)
+        self._windowed_size = self._clamp_windowed_size(self._compute_default_windowed_size())
         self._fullscreen_active = False
 
         self.screen = self._apply_display_mode()
         self.clock = pygame.time.Clock()
-        self.ui_fonts: UIFonts = load_ui_fonts()
+        self._base_ui_fonts: UIFonts = load_ui_fonts()
+        self._responsive_font_cache: dict[tuple[int, int, int], UIFonts] = {}
+        self.ui_fonts: UIFonts = self._base_ui_fonts
         self.title_font = self.ui_fonts.title
         self.body_font = self.ui_fonts.body
         self.small_font = self.ui_fonts.small
@@ -115,6 +120,7 @@ class GameApp:
 
         # Start menu music immediately on boot.
         self._sync_music_for_current_screen()
+        self._sync_active_fonts()
 
     def run(self) -> None:
         while self.app_state.running:
@@ -122,6 +128,7 @@ class GameApp:
             frame_dt = self.clock.tick(SETTINGS.max_render_fps) / 1000.0
             events = pygame.event.get()
             self._handle_window_events(events)
+            self._sync_active_fonts()
 
             if self.app_state.current_screen in (
                 AppScreen.MAIN_MENU,
@@ -724,10 +731,10 @@ class GameApp:
         target_fullscreen = bool(self.profile.settings.fullscreen)
         current_surface = pygame.display.get_surface()
         if target_fullscreen and not self._fullscreen_active and current_surface is not None:
-            self._windowed_size = current_surface.get_size()
+            self._windowed_size = self._clamp_windowed_size(current_surface.get_size())
 
         flags = pygame.FULLSCREEN if target_fullscreen else pygame.RESIZABLE
-        size = (0, 0) if target_fullscreen else self._windowed_size
+        size = (0, 0) if target_fullscreen else self._clamp_windowed_size(self._windowed_size)
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -738,12 +745,69 @@ class GameApp:
 
         self._fullscreen_active = target_fullscreen
         if not target_fullscreen:
-            self._windowed_size = screen.get_size()
+            self._windowed_size = self._clamp_windowed_size(screen.get_size())
 
         pygame.display.set_caption(SETTINGS.title)
         self._sync_display_surface(screen)
 
         return screen
+
+    def _compute_default_windowed_size(self) -> tuple[int, int]:
+        desktop_sizes = pygame.display.get_desktop_sizes()
+        if desktop_sizes:
+            desktop_width, desktop_height = desktop_sizes[0]
+        else:
+            display_info = pygame.display.Info()
+            desktop_width = max(SETTINGS.screen_width, int(display_info.current_w or 0))
+            desktop_height = max(SETTINGS.screen_height, int(display_info.current_h or 0))
+
+        usable_width = max(320, int(desktop_width) - 80)
+        usable_height = max(240, int(desktop_height) - 120)
+        target_width = min(usable_width, max(SETTINGS.screen_width, int(desktop_width * 0.88)))
+        target_height = min(usable_height, max(SETTINGS.screen_height, int(desktop_height * 0.88)))
+        return self._clamp_windowed_size((target_width, target_height))
+
+    def _clamp_windowed_size(self, size: tuple[int, int]) -> tuple[int, int]:
+        width, height = size
+        return (
+            max(self._MIN_WINDOWED_WIDTH, int(width)),
+            max(self._MIN_WINDOWED_HEIGHT, int(height)),
+        )
+
+    def _fonts_for_surface(self) -> UIFonts:
+        width = max(320, self.screen.get_width())
+        height = max(240, self.screen.get_height())
+        base_scale = min(width / SETTINGS.screen_width, height / SETTINGS.screen_height)
+        body_scale = max(0.72, min(1.0, base_scale))
+        title_scale = max(0.68, min(1.0, body_scale - 0.04))
+        hud_scale = max(0.74, min(1.0, body_scale))
+        key = (
+            int(round(body_scale * 100)),
+            int(round(title_scale * 100)),
+            int(round(hud_scale * 100)),
+        )
+        cached = self._responsive_font_cache.get(key)
+        if cached is not None:
+            return cached
+
+        responsive = scale_ui_fonts(
+            self._base_ui_fonts,
+            scale=body_scale,
+            title_scale=title_scale,
+            heading_scale=body_scale,
+            hud_scale=hud_scale,
+        )
+        self._responsive_font_cache[key] = responsive
+        return responsive
+
+    def _sync_active_fonts(self) -> None:
+        active_fonts = self._fonts_for_surface()
+        self.ui_fonts = active_fonts
+        self.title_font = active_fonts.title
+        self.body_font = active_fonts.body
+        self.small_font = active_fonts.small
+        if hasattr(self, "renderer"):
+            self.renderer.set_fonts(active_fonts)
 
     def _handle_window_events(self, events: list[pygame.event.Event]) -> None:
         for event in events:
@@ -759,7 +823,18 @@ class GameApp:
                     height = int(
                         getattr(event, "y", 0) or getattr(event, "h", 0) or self.screen.get_height()
                     )
-                    self._windowed_size = (max(320, width), max(240, height))
+                    clamped = self._clamp_windowed_size((width, height))
+                    self._windowed_size = clamped
+                    if (width, height) != clamped:
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="Requested window was forcibly resized by the OS\\.",
+                                category=RuntimeWarning,
+                            )
+                            resized_screen = pygame.display.set_mode(clamped, pygame.RESIZABLE)
+                        self._sync_display_surface(resized_screen)
+                        continue
                 self._sync_display_surface(pygame.display.get_surface())
 
     def _sync_display_surface(self, screen: pygame.Surface | None) -> None:
@@ -776,3 +851,5 @@ class GameApp:
                 self.camera.set_world_bounds(self.world.world_width, self.world.world_height)
             else:
                 self.camera.set_world_bounds(SETTINGS.world_width, SETTINGS.world_height)
+        if hasattr(self, "_base_ui_fonts"):
+            self._sync_active_fonts()

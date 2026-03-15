@@ -23,14 +23,14 @@ class GameOverScreen:
         surface: pygame.Surface,
         body_font: pygame.font.Font,
     ) -> str | None:
-        _, menu_start, row_height = self._layout_metrics(surface)
+        _, _, menu_start, row_height = self._layout_metrics(surface)
         option_rects = build_centered_menu_rects(
             surface=surface,
             font=body_font,
             options=self.options,
             start_y=menu_start,
             row_height=row_height,
-            min_width=max(300, surface.get_width() // 3),
+            min_width=max(220, min(420, surface.get_width() - 56)),
         )
         hovered = hovered_index(actions.mouse_position, option_rects)
         self.hover_index = hovered
@@ -64,57 +64,64 @@ class GameOverScreen:
         total_run_coins = run_result.total_run_coins if run_result else 0
         enemies_killed = run_result.enemies_killed_total if run_result else 0
         survival_time = run_result.survival_time_seconds if run_result else 0.0
-        _, menu_start, row_height = self._layout_metrics(surface)
+        title_y, stats_start_y, menu_start, row_height = self._layout_metrics(surface)
         option_rects = build_centered_menu_rects(
             surface=surface,
             font=body_font,
             options=self.options,
             start_y=menu_start,
             row_height=row_height,
-            min_width=max(300, surface.get_width() // 3),
+            min_width=max(220, min(420, surface.get_width() - 56)),
         )
 
-        draw_centered_text(surface, title_font, "Game Over", 110, (245, 122, 122))
+        draw_centered_text(surface, title_font, "Game Over", title_y, (245, 122, 122))
+        stat_step = max(18, int(body_font.get_linesize() * 1.15))
+        y = stats_start_y
         draw_centered_text(
             surface,
             body_font,
             f"Survival Time: {survival_time:.1f}s",
-            150,
+            y,
             (225, 225, 225),
         )
+        y += stat_step
         draw_centered_text(
             surface,
             body_font,
             f"Run Coins Earned: {total_run_coins}",
-            180,
+            y,
             (225, 225, 225),
         )
+        y += stat_step
         draw_centered_text(
             surface,
             body_font,
             f"Enemies Killed: {enemies_killed}",
-            210,
+            y,
             (225, 225, 225),
         )
+        y += stat_step
         draw_centered_text(
             surface,
             body_font,
             f"Persistent Meta Currency: {profile.meta_currency}",
-            240,
+            y,
             (225, 225, 225),
         )
+        y += stat_step
         draw_centered_text(
             surface,
             body_font,
             f"Meta Currency Gained: +{total_run_coins}",
-            270,
+            y,
             (200, 230, 200),
         )
+        y += stat_step
         draw_centered_text(
             surface,
             body_font,
             "Results are based on authoritative simulation data.",
-            300,
+            y,
             (190, 190, 190),
         )
 
@@ -129,12 +136,14 @@ class GameOverScreen:
             selected_color=(255, 235, 120),
         )
 
-    def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int]:
+    def _layout_metrics(self, surface: pygame.Surface) -> tuple[int, int, int, int]:
         height = surface.get_height()
-        title_y = max(96, height // 6)
-        row_height = max(46, min(62, height // 10))
-        menu_start = max(title_y + 250, height - (row_height * 2) - 64)
-        return title_y, menu_start, row_height
+        top_padding = max(18, height // 18)
+        title_y = top_padding + max(28, height // 9)
+        stats_start_y = title_y + max(34, height // 12)
+        row_height = max(34, min(62, height // 10))
+        menu_start = max(stats_start_y + max(120, height // 3), height - (row_height * 2) - 48)
+        return title_y, stats_start_y, menu_start, row_height
 
     def _command_for_selection(self) -> str:
         if self.selected_index == 0:

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
+    ENEMY_ABILITY_RANGED_SHOT,
     EnemyAbilityDefinition,
     EnemySpawnRequest,
 )
@@ -336,16 +337,20 @@ class World:
         self,
         position: Vec2,
         velocity: Vec2,
-        owner_player_id: str,
         damage: int,
         ttl_seconds: float,
         radius: float,
+        owner_player_id: str = "",
+        source_faction: str = "player",
+        projectile_effect_id: str | None = None,
     ) -> None:
         projectile = Projectile(
             entity_id=self._allocate_entity_id(),
             position=position,
             radius=radius,
             owner_player_id=owner_player_id,
+            source_faction=source_faction,
+            projectile_effect_id=projectile_effect_id,
             velocity=velocity,
             damage=damage,
             ttl_seconds=ttl_seconds,
@@ -479,15 +484,26 @@ class World:
             if not enemy.alive:
                 continue
             alive_enemy_ids.add(enemy.entity_id)
+            enemy.attack_cooldown_seconds = max(0.0, enemy.attack_cooldown_seconds - dt)
 
             if enemy.active_ability_id is not None:
                 enemy.velocity = Vec2(0.0, 0.0)
                 continue
 
             target_player = nearest_player(enemy.position, self.players)
+            if target_player is None:
+                enemy.velocity = Vec2(0.0, 0.0)
+                continue
+
+            if self._apply_ranged_attack_behavior(enemy, target_player):
+                previous_position = enemy.position.copy()
+                enemy.update(dt, self.world_width, self.world_height)
+                self._resolve_blocking_for_entity(enemy, previous_position)
+                continue
+
             enemy.velocity = self.navigation.choose_velocity(
                 enemy=enemy,
-                target_position=target_player.position if target_player is not None else None,
+                target_position=target_player.position,
                 dt=dt,
                 blocking_grid=self.blocking_grid,
                 tile_size=self.blocking_tile_size,
@@ -497,6 +513,42 @@ class World:
             enemy.update(dt, self.world_width, self.world_height)
             self._resolve_blocking_for_entity(enemy, previous_position)
         self.navigation.prune(alive_enemy_ids)
+
+    def _apply_ranged_attack_behavior(self, enemy: Enemy, target_player: Player) -> bool:
+        ability = self._get_ranged_shot_ability(enemy)
+        if ability is None:
+            return False
+
+        attack_range = max(1.0, float(ability.attack_range))
+        delta = target_player.position - enemy.position
+        in_range = delta.length_squared() <= attack_range * attack_range
+        if not in_range:
+            return False
+
+        enemy.velocity = Vec2(0.0, 0.0)
+        if enemy.attack_cooldown_seconds > 0.0:
+            return True
+
+        if delta.length_squared() <= 0.0:
+            return True
+
+        direction = delta.normalized()
+        projectile_speed = max(1.0, float(ability.projectile_speed))
+        projectile_damage = max(1, int(ability.projectile_damage))
+        projectile_ttl = max(0.05, float(ability.projectile_ttl_seconds))
+        projectile_radius = max(1.0, float(ability.projectile_radius))
+        self.spawn_projectile(
+            position=enemy.position.copy(),
+            velocity=direction * projectile_speed,
+            owner_player_id="",
+            damage=projectile_damage,
+            ttl_seconds=projectile_ttl,
+            radius=projectile_radius,
+            source_faction="enemy",
+            projectile_effect_id=ability.projectile_effect_id,
+        )
+        enemy.attack_cooldown_seconds = max(0.05, float(ability.attack_interval_seconds))
+        return True
 
     def handle_enemy_player_contact(self, enemy: Enemy, player: Player) -> bool:
         delayed_explosion = self._get_delayed_explosion_ability(enemy)
@@ -675,6 +727,15 @@ class World:
             return None
         for ability in profile.abilities:
             if ability.ability_id == ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH:
+                return ability
+        return None
+
+    def _get_ranged_shot_ability(self, enemy: Enemy) -> EnemyAbilityDefinition | None:
+        profile = get_enemy_profile(enemy.profile_id)
+        if profile is None:
+            return None
+        for ability in profile.abilities:
+            if ability.ability_id == ENEMY_ABILITY_RANGED_SHOT:
                 return ability
         return None
 

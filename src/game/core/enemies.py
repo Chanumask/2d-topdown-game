@@ -41,6 +41,14 @@ class EnemyAbilityDefinition:
     explosion_damage: int = 0
     explosion_radius: float = 0.0
     loop_effect_id: str | None = None
+    attack_interval_seconds: float = 0.0
+    attack_range: float = 0.0
+    projectile_speed: float = 0.0
+    projectile_damage: int = 0
+    projectile_ttl_seconds: float = 0.0
+    projectile_radius: float = 0.0
+    fire_effect_id: str | None = None
+    projectile_effect_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,7 +122,10 @@ class EnemySpawnRequest:
 
 
 ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH = "delayed_explosion_on_touch"
+ENEMY_ABILITY_RANGED_SHOT = "ranged_shot"
 ENEMY_VFX_FLOATING_EYE_PURPLE = "floating_eye_primed_purple"
+ENEMY_VFX_WARPED_SKULL_SHOT_PURPLE = "warped_skull_shot_purple"
+ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE = "warped_skull_projectile_purple"
 
 
 def combine_enemy_stat_modifiers(

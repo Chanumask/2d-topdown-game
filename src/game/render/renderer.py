@@ -75,6 +75,9 @@ class Renderer:
         self.enemy_animation_states: dict[int, EnemyAnimationState] = {}
         self.damage_aura_animation_states: dict[str, TimedBlessingAnimationState] = {}
         self.enemy_effect_animation_states: dict[tuple[int, str], TimedBlessingAnimationState] = {}
+        self.projectile_effect_animation_states: dict[
+            tuple[int, str], TimedBlessingAnimationState
+        ] = {}
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
         self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
@@ -89,11 +92,16 @@ class Renderer:
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
 
+    def set_fonts(self, fonts: UIFonts) -> None:
+        self.bottom_hud.set_fonts(fonts)
+        self.top_hud.set_fonts(fonts)
+
     def set_active_map(self, map_id: str) -> None:
         self.ground_layer = AshlandGroundLayer(map_id=map_id)
         self.world_effect_player.clear()
         self.damage_aura_animation_states.clear()
         self.enemy_effect_animation_states.clear()
+        self.projectile_effect_animation_states.clear()
 
     def render(self, snapshot: WorldSnapshot) -> None:
         render_now_seconds = pygame.time.get_ticks() / 1000.0
@@ -105,6 +113,7 @@ class Renderer:
         if snapshot.tick < self._last_snapshot_tick:
             self.world_effect_player.clear()
             self.enemy_effect_animation_states.clear()
+            self.projectile_effect_animation_states.clear()
         self._last_snapshot_tick = snapshot.tick
         self.world_effect_player.consume_events(snapshot.vfx_events)
 
@@ -127,7 +136,7 @@ class Renderer:
         self._draw_coins(snapshot)
         self._draw_blessings(snapshot)
         self._draw_enemies(snapshot, render_dt)
-        self._draw_projectiles(snapshot)
+        self._draw_projectiles(snapshot, render_dt)
         self._draw_damage_auras(snapshot, render_dt)
         self._draw_players(snapshot, render_dt)
         self._draw_world_effects(render_dt)
@@ -383,15 +392,48 @@ class Renderer:
             if effect_key in active_enemy_effect_keys
         }
 
-    def _draw_projectiles(self, snapshot: WorldSnapshot) -> None:
+    def _draw_projectiles(self, snapshot: WorldSnapshot, render_dt: float) -> None:
+        active_projectile_effect_keys: set[tuple[int, str]] = set()
         for projectile in snapshot.projectiles:
             if not isinstance(projectile, dict):
                 continue
+            projectile_id = int(projectile.get("entity_id", -1))
             center = self.camera.world_to_screen(self._read_position(projectile))
+
+            effect_id = (
+                str(projectile.get("projectile_effect_id"))
+                if projectile.get("projectile_effect_id") not in (None, "")
+                else None
+            )
+            if effect_id:
+                effect_clip = self.world_effect_player.library.get_clip(effect_id)
+                if effect_clip is not None and effect_clip.frames and projectile_id >= 0:
+                    effect_key = (projectile_id, effect_id)
+                    active_projectile_effect_keys.add(effect_key)
+                    effect_state = self.projectile_effect_animation_states.setdefault(
+                        effect_key,
+                        TimedBlessingAnimationState(),
+                    )
+                    self._advance_looping_animation(
+                        effect_state,
+                        fps=float(effect_clip.fps),
+                        frame_count=len(effect_clip.frames),
+                        render_dt=render_dt,
+                    )
+                    effect_frame = effect_clip.frames[effect_state.frame_index]
+                    effect_rect = effect_frame.get_rect(center=center)
+                    self.screen.blit(effect_frame, effect_rect)
+
             if self._draw_rock_projectile(projectile, center):
                 continue
             radius = round(float(projectile.get("radius", self.settings.projectile_radius)))
             pygame.draw.circle(self.screen, self.settings.projectile_color, center, radius)
+
+        self.projectile_effect_animation_states = {
+            effect_key: state
+            for effect_key, state in self.projectile_effect_animation_states.items()
+            if effect_key in active_projectile_effect_keys
+        }
 
     def _draw_coins(self, snapshot: WorldSnapshot) -> None:
         for coin in snapshot.coins:

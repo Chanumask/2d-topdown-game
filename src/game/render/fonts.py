@@ -17,6 +17,7 @@ class UIFonts:
     hud: pygame.font.Font
     using_custom_font: bool
     source_path: str | None
+    reference_sizes: tuple[int, int, int, int, int]
 
 
 def load_ui_fonts(font_path: Path | None = None) -> UIFonts:
@@ -37,6 +38,46 @@ def load_ui_fonts(font_path: Path | None = None) -> UIFonts:
         hud=_create_font(resolved_font_path, 22),
         using_custom_font=using_custom_font,
         source_path=str(resolved_font_path) if resolved_font_path is not None else None,
+        reference_sizes=(56, 42, 30, 24, 22),
+    )
+
+
+def scale_ui_fonts(
+    base_fonts: UIFonts,
+    *,
+    scale: float,
+    title_scale: float | None = None,
+    heading_scale: float | None = None,
+    hud_scale: float | None = None,
+) -> UIFonts:
+    source_path = Path(base_fonts.source_path) if base_fonts.source_path is not None else None
+    title_base, heading_base, body_base, small_base, hud_base = base_fonts.reference_sizes
+    body_factor = max(0.62, min(1.0, float(scale)))
+    title_factor = (
+        max(0.60, min(1.0, float(title_scale)))
+        if title_scale is not None
+        else body_factor
+    )
+    heading_factor = (
+        max(0.60, min(1.0, float(heading_scale)))
+        if heading_scale is not None
+        else body_factor
+    )
+    hud_factor = (
+        max(0.62, min(1.0, float(hud_scale)))
+        if hud_scale is not None
+        else body_factor
+    )
+
+    return UIFonts(
+        title=_create_font(source_path, max(20, int(round(title_base * title_factor)))),
+        heading=_create_font(source_path, max(18, int(round(heading_base * heading_factor)))),
+        body=_create_font(source_path, max(15, int(round(body_base * body_factor)))),
+        small=_create_font(source_path, max(13, int(round(small_base * body_factor)))),
+        hud=_create_font(source_path, max(13, int(round(hud_base * hud_factor)))),
+        using_custom_font=base_fonts.using_custom_font,
+        source_path=base_fonts.source_path,
+        reference_sizes=base_fonts.reference_sizes,
     )
 
 
