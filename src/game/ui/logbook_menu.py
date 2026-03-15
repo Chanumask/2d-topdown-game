@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pygame
 
@@ -13,12 +14,13 @@ from game.input.menu_actions import MenuActions
 from game.render.blessings import BlessingSpriteLibrary
 from game.render.effects import EffectClipLibrary
 from game.render.enemies import EnemySpriteLibrary
-from game.render.spritesheet import pixelart_upscale_surface
+from game.render.spritesheet import load_pixelart_image, pixelart_upscale_surface
 from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
 
 TAB_ENEMIES = "enemies"
 TAB_BLESSINGS = "blessings"
 TAB_ABILITIES = "abilities"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,7 @@ class LogbookScreen:
         self.blessings = list_blessings()
         self.active_abilities = list_active_abilities()
         self._enemy_preview_cache: dict[str, pygame.Surface | None] = {}
+        self._ability_preview_cache: dict[str, pygame.Surface | None] = {}
         self._ability_effect_animation_states: dict[
             tuple[str, str, str], TimedEffectAnimationState
         ] = {}
@@ -336,7 +339,7 @@ class LogbookScreen:
                 rects[index],
                 title=ability.display_name,
                 subtitle="",
-                sprite=None,
+                sprite=self._ability_preview(ability, target_size=56),
                 selected=self.focus_area == "grid" and selected_index == index,
                 hovered=self.hover_grid_index == index,
                 unlocked=True,
@@ -550,6 +553,11 @@ class LogbookScreen:
         for index, line in enumerate(description_lines[:2]):
             rendered = body_font.render(line, True, (220, 220, 220))
             surface.blit(rendered, (panel_rect.x + 28, panel_rect.y + 58 + (index * 24)))
+
+        preview = self._ability_preview(ability, target_size=108)
+        if preview is not None:
+            preview_rect = preview.get_rect(topright=(panel_rect.right - 24, panel_rect.y + 26))
+            surface.blit(preview, preview_rect)
 
         variants_title = small_font.render("Variants", True, (180, 180, 180))
         surface.blit(variants_title, (panel_rect.x + 28, panel_rect.y + 122))
@@ -801,6 +809,57 @@ class LogbookScreen:
         preview = pixelart_upscale_surface(clip.frames[0], 2)
         self._enemy_preview_cache[enemy_id] = preview
         return preview
+
+    def _ability_preview(
+        self,
+        ability: ActiveAbilityDefinition,
+        *,
+        target_size: int,
+    ) -> pygame.Surface | None:
+        cache_key = f"{ability.ability_id}:{int(target_size)}"
+        cached = self._ability_preview_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        preview = self._build_ability_preview_surface(ability)
+        if preview is None:
+            self._ability_preview_cache[cache_key] = None
+            return None
+
+        width, height = preview.get_size()
+        max_dim = max(width, height)
+        if max_dim <= 0:
+            self._ability_preview_cache[cache_key] = None
+            return None
+
+        scale = float(target_size) / float(max_dim)
+        scaled = pygame.transform.scale(
+            preview,
+            (
+                max(1, int(round(width * scale))),
+                max(1, int(round(height * scale))),
+            ),
+        )
+        self._ability_preview_cache[cache_key] = scaled
+        return scaled
+
+    def _build_ability_preview_surface(
+        self,
+        ability: ActiveAbilityDefinition,
+    ) -> pygame.Surface | None:
+        if ability.logbook_preview_icon_path:
+            icon_path = (PROJECT_ROOT / ability.logbook_preview_icon_path).resolve()
+            return load_pixelart_image(icon_path, scale_multiple=4)
+
+        if ability.logbook_preview_effect_id:
+            clip = self.effect_library.get_clip(ability.logbook_preview_effect_id)
+            if clip is None or not clip.frames:
+                return None
+
+            frame = clip.frames[-1] if ability.logbook_preview_frame == "last" else clip.frames[0]
+            return frame.copy()
+
+        return None
 
     def _enemy_tier_color(self, tier: EnemyTier) -> tuple[int, int, int]:
         if tier is EnemyTier.ELITE:

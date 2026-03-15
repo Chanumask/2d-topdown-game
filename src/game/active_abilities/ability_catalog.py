@@ -27,6 +27,9 @@ class ActiveAbilityDefinition:
     difficulty_scaling: dict[str, float]
     variants: tuple[ActiveAbilityVariant, ...]
     activation_vfx_effect_id: str | None = None
+    logbook_preview_effect_id: str | None = None
+    logbook_preview_icon_path: str | None = None
+    logbook_preview_frame: str = "last"
 
 
 ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
@@ -68,6 +71,8 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             ),
         ),
         activation_vfx_effect_id=None,
+        logbook_preview_effect_id="active_ability.guardian_spirit.loop",
+        logbook_preview_frame="last",
     ),
     ABILITY_SHOCKWAVE: ActiveAbilityDefinition(
         ability_id=ABILITY_SHOCKWAVE,
@@ -106,6 +111,8 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             ),
         ),
         activation_vfx_effect_id="active_ability.shockwave.activate",
+        logbook_preview_effect_id="active_ability.shockwave.activate",
+        logbook_preview_frame="last",
     ),
     ABILITY_STONE_FRENZY: ActiveAbilityDefinition(
         ability_id=ABILITY_STONE_FRENZY,
@@ -147,6 +154,7 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             ),
         ),
         activation_vfx_effect_id="active_ability.stone_frenzy.activate",
+        logbook_preview_icon_path="assets/effects/Rock.png",
     ),
 }
 
