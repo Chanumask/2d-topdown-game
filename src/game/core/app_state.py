@@ -22,6 +22,8 @@ class AppState:
     logbook_return_screen: AppScreen = AppScreen.MAIN_MENU
     selected_character_id: str = ""
     selected_map_id: str = ""
+    selected_ability_id: str = ""
+    selected_ability_variant_id: str = ""
     current_run_banked: bool = False
     running: bool = True
 

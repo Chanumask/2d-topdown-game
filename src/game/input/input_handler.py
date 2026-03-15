@@ -1,24 +1,30 @@
 import pygame
 
+from game.core.profile import UserSettings
 from game.input.actions import PlayerActions, PlayerId
 from game.input.gameplay_input import GameplayInputFrame
 from game.input.session_actions import SessionActions
 
 
 class InputHandler:
-    def __init__(self, local_player_id: PlayerId) -> None:
+    def __init__(self, local_player_id: PlayerId, settings: UserSettings) -> None:
         self.local_player_id = local_player_id
+        self.settings = settings
 
     def collect(self, events: list[pygame.event.Event]) -> GameplayInputFrame:
         throw_pressed = False
+        activate_ability_pressed = False
         request_pause_pressed = False
         quit_requested = False
+        activate_key = self._resolve_activate_ability_key()
 
         for event in events:
             if event.type == pygame.QUIT:
                 quit_requested = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 throw_pressed = True
+            elif event.type == pygame.KEYDOWN and event.key == activate_key:
+                activate_ability_pressed = True
             elif event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_p):
                 request_pause_pressed = True
 
@@ -39,6 +45,8 @@ class InputHandler:
             throw=throw_intent,
             throw_pressed=throw_pressed,
             throw_held=throw_held,
+            activate_ability=activate_ability_pressed,
+            activate_ability_pressed=activate_ability_pressed,
         )
         session_actions = SessionActions(request_pause=request_pause)
 
@@ -47,3 +55,13 @@ class InputHandler:
             actions_by_player={self.local_player_id: gameplay_actions},
             session_actions_by_player={self.local_player_id: session_actions},
         )
+
+    def _resolve_activate_ability_key(self) -> int:
+        key_name = str(self.settings.activate_ability_key).strip().lower()
+        if not key_name:
+            return pygame.K_SPACE
+
+        try:
+            return pygame.key.key_code(key_name)
+        except (ValueError, TypeError):
+            return pygame.K_SPACE

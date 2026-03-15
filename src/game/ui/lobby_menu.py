@@ -22,9 +22,16 @@ class LobbyScreen:
         *,
         selected_character_name: str,
         selected_map_name: str,
+        selected_ability_name: str,
+        selected_variant_name: str,
     ) -> str | None:
         _, panel_start_y, row_height = self._layout_metrics(surface)
-        option_labels = self._option_labels(selected_character_name, selected_map_name)
+        option_labels = self._option_labels(
+            selected_character_name,
+            selected_map_name,
+            selected_ability_name,
+            selected_variant_name,
+        )
         option_rects = build_centered_menu_rects(
             surface=surface,
             font=body_font,
@@ -67,11 +74,19 @@ class LobbyScreen:
         *,
         selected_character_name: str,
         selected_map_name: str,
+        selected_ability_name: str,
+        selected_variant_name: str,
         character_count: int,
         map_count: int,
+        ability_count: int,
     ) -> None:
         title_y, panel_start_y, row_height = self._layout_metrics(surface)
-        option_labels = self._option_labels(selected_character_name, selected_map_name)
+        option_labels = self._option_labels(
+            selected_character_name,
+            selected_map_name,
+            selected_ability_name,
+            selected_variant_name,
+        )
         option_rects = build_centered_menu_rects(
             surface=surface,
             font=body_font,
@@ -85,7 +100,7 @@ class LobbyScreen:
         draw_centered_text(
             surface,
             body_font,
-            f"Characters: {character_count}  |  Maps: {map_count}",
+            f"Characters: {character_count}  |  Maps: {map_count}  |  Abilities: {ability_count}",
             title_y + max(30, row_height - 6),
             (188, 188, 188),
         )
@@ -109,10 +124,17 @@ class LobbyScreen:
         )
 
     @staticmethod
-    def _option_labels(selected_character_name: str, selected_map_name: str) -> list[str]:
+    def _option_labels(
+        selected_character_name: str,
+        selected_map_name: str,
+        selected_ability_name: str,
+        selected_variant_name: str,
+    ) -> list[str]:
         return [
             f"Character: {selected_character_name}",
             f"Map: {selected_map_name}",
+            f"Ability: {selected_ability_name}",
+            f"Variant: {selected_variant_name}",
             "Start Run",
             "Back to Main Menu",
         ]
@@ -124,7 +146,17 @@ class LobbyScreen:
         panel_top = title_y + max(96, height // 5)
         bottom_padding = max(20, height // 14)
         available_height = max(120, height - panel_top - bottom_padding)
-        row_height = max(34, min(72, available_height // max(1, len(self._option_labels("", "")))))
+        row_height = max(
+            34,
+            min(
+                72,
+                available_height
+                // max(
+                    1,
+                    len(self._option_labels("", "", "", "")),
+                ),
+            ),
+        )
         panel_start_y = panel_top + (row_height // 2)
         return title_y, panel_start_y, row_height
 
@@ -134,6 +166,10 @@ class LobbyScreen:
             return "character_prev" if step < 0 else "character_next"
         if index == 1:
             return "map_prev" if step < 0 else "map_next"
+        if index == 2:
+            return "ability_prev" if step < 0 else "ability_next"
+        if index == 3:
+            return "variant_prev" if step < 0 else "variant_next"
         return None
 
     @staticmethod
@@ -143,7 +179,11 @@ class LobbyScreen:
         if index == 1:
             return "map_next"
         if index == 2:
-            return "start_run"
+            return "ability_next"
         if index == 3:
+            return "variant_next"
+        if index == 4:
+            return "start_run"
+        if index == 5:
             return "back_main_menu"
         return None

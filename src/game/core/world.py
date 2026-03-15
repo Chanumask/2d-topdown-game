@@ -4,6 +4,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
+from game.active_abilities import ActiveAbilityRuntime
 from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
@@ -64,6 +65,7 @@ class World:
     enemy_director: EnemyDirector = field(init=False)
     navigation: EnemyNavigationSystem = field(init=False)
     blessing_system: BlessingSystem = field(init=False)
+    active_ability_runtime: ActiveAbilityRuntime = field(init=False)
     _rng: random.Random = field(init=False, repr=False)
     _next_entity_id: int = field(init=False, repr=False)
     _next_vfx_event_id: int = field(init=False, repr=False)
@@ -105,8 +107,15 @@ class World:
             projectile_ttl_seconds=self.settings.projectile_ttl_seconds,
             projectile_radius=self.settings.projectile_radius,
         )
+        self.active_ability_runtime = ActiveAbilityRuntime()
 
-    def add_player(self, player_id: str, character_id: str | None = None) -> None:
+    def add_player(
+        self,
+        player_id: str,
+        character_id: str | None = None,
+        active_ability_id: str = "",
+        active_ability_variant_id: str = "",
+    ) -> None:
         if player_id in self.players:
             return
 
@@ -139,6 +148,11 @@ class World:
             damage_iframe_seconds=self.settings.player_touch_iframe_seconds,
         )
         self.enemies_killed_by_player.setdefault(player_id, 0)
+        self.active_ability_runtime.equip_player(
+            player_id,
+            active_ability_id,
+            active_ability_variant_id,
+        )
 
     def ensure_min_bounds(self, min_width: float, min_height: float) -> None:
         updated_width = max(self.world_width, float(min_width))
@@ -192,6 +206,7 @@ class World:
             previous_position = player.position.copy()
             player.update(dt, self.world_width, self.world_height)
             self._resolve_blocking_for_entity(player, previous_position)
+        self.active_ability_runtime.update(self, dt)
 
         self.enemy_director.update(self, dt)
         self.spawner.update(self, dt)
@@ -225,7 +240,13 @@ class World:
         )
 
     def snapshot(self) -> WorldSnapshot:
-        players = [self.players[player_id].to_dict() for player_id in sorted(self.players)]
+        players: list[dict[str, object]] = []
+        for player_id in sorted(self.players):
+            payload = self.players[player_id].to_dict()
+            ability_payload = self.active_ability_runtime.snapshot_payload(self, player_id)
+            if ability_payload is not None:
+                payload["active_ability"] = ability_payload
+            players.append(payload)
         enemies = [self.enemies[enemy_id].to_dict() for enemy_id in sorted(self.enemies)]
         projectiles = [
             self.projectiles[projectile_id].to_dict() for projectile_id in sorted(self.projectiles)
@@ -375,7 +396,15 @@ class World:
         )
         self.blessings[blessing.entity_id] = blessing
 
-    def emit_world_vfx(self, effect_id: str, position: Vec2) -> None:
+    def emit_world_vfx(
+        self,
+        effect_id: str,
+        position: Vec2,
+        *,
+        angle_degrees: float | None = None,
+        travel_distance: float | None = None,
+        travel_duration_seconds: float | None = None,
+    ) -> None:
         if not effect_id:
             return
 
@@ -384,6 +413,12 @@ class World:
             "effect_id": effect_id,
             "position": position.to_dict(),
         }
+        if angle_degrees is not None:
+            event_payload["angle_degrees"] = float(angle_degrees)
+        if travel_distance is not None:
+            event_payload["travel_distance"] = max(0.0, float(travel_distance))
+        if travel_duration_seconds is not None:
+            event_payload["travel_duration_seconds"] = max(0.0, float(travel_duration_seconds))
         self._next_vfx_event_id += 1
         self._pending_vfx_events.append(event_payload)
 
@@ -456,8 +491,26 @@ class World:
 
             if actions.throw:
                 self.combat.try_throw_projectile(self, player)
+            if actions.activate_ability or actions.activate_ability_pressed:
+                self.active_ability_runtime.try_activate(self, player_id)
 
         self._pending_actions.clear()
+
+    def apply_player_damage(self, player: Player, amount: int) -> int:
+        if amount <= 0 or not player.alive:
+            return 0
+
+        final_damage = self.active_ability_runtime.modify_incoming_damage(
+            self,
+            player.player_id,
+            amount,
+        )
+        if final_damage <= 0:
+            return 0
+
+        health_before = int(player.health)
+        player.take_damage(final_damage)
+        return max(0, health_before - int(player.health))
 
     def _apply_session_actions(self) -> None:
         for player_id, session_actions in self._pending_session_actions.items():
@@ -702,7 +755,7 @@ class World:
                 player.radius,
             ):
                 continue
-            player.take_damage(explosion_damage)
+            self.apply_player_damage(player, explosion_damage)
 
         for enemy in list(self.enemies.values()):
             if not enemy.alive or enemy.entity_id == source_enemy.entity_id:

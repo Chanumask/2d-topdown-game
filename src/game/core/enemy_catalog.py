@@ -61,10 +61,10 @@ WARPED_SKULL_RANGED_SHOT = EnemyAbilityDefinition(
     display_name="Warp Bolt",
     description="Fires a straight projectile toward players within range.",
     attack_interval_seconds=4.0,
-    attack_range=250.0,
+    attack_range=350.0,
     projectile_speed=200.0,
     projectile_damage=25,
-    projectile_ttl_seconds=1.25,
+    projectile_ttl_seconds=2.5,
     projectile_radius=4.0,
     projectile_effect_id=ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
 )

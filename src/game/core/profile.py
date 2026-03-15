@@ -11,6 +11,7 @@ class UserSettings:
     sfx_volume: int = 90
     fullscreen: bool = False
     mouse_sensitivity: float = 1.0
+    activate_ability_key: str = "space"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -19,6 +20,7 @@ class UserSettings:
             "sfx_volume": self.sfx_volume,
             "fullscreen": self.fullscreen,
             "mouse_sensitivity": self.mouse_sensitivity,
+            "activate_ability_key": self.activate_ability_key,
         }
 
     @classmethod
@@ -29,6 +31,7 @@ class UserSettings:
             sfx_volume=int(payload.get("sfx_volume", 90)),
             fullscreen=bool(payload.get("fullscreen", False)),
             mouse_sensitivity=float(payload.get("mouse_sensitivity", 1.0)),
+            activate_ability_key=str(payload.get("activate_ability_key", "space")),
         )
 
 

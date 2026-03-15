@@ -63,6 +63,7 @@ class AudioManager:
         asset = MUSIC_ASSETS.get(key)
         if asset is None:
             self._log_once(f"unknown_music:{key}", f"[Audio] Unknown music key: {key}")
+            self._stop_on_failed_switch(target_key=key)
             return False
 
         if self._current_music_key == key and pygame.mixer.music.get_busy() and not restart:
@@ -78,6 +79,7 @@ class AudioManager:
                 f"missing_music:{key}",
                 f"[Audio] Missing music file for '{key}'. Tried: {attempted}",
             )
+            self._stop_on_failed_switch(target_key=key)
             return False
 
         try:
@@ -91,7 +93,16 @@ class AudioManager:
                 f"music_error:{key}",
                 f"[Audio] Failed to play music '{key}': {error}",
             )
+            self._stop_on_failed_switch(target_key=key)
             return False
+
+    def _stop_on_failed_switch(self, *, target_key: str) -> None:
+        if self._current_music_key == target_key:
+            return
+        if not self._mixer_available:
+            return
+        pygame.mixer.music.stop()
+        self._current_music_key = None
 
     def play_ui_hover(self) -> bool:
         return self.play_sfx(SFX_UI_HOVER)

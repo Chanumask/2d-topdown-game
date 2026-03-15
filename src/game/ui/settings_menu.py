@@ -6,6 +6,16 @@ from game.ui.widgets import draw_centered_text, hovered_index
 
 
 class SettingsScreen:
+    ABILITY_KEY_OPTIONS = [
+        ("space", "Space"),
+        ("q", "Q"),
+        ("e", "E"),
+        ("f", "F"),
+        ("r", "R"),
+        ("left shift", "LShift"),
+        ("left ctrl", "LCtrl"),
+    ]
+
     def __init__(self) -> None:
         self.items = [
             "Master Volume",
@@ -13,6 +23,7 @@ class SettingsScreen:
             "SFX Volume",
             "Fullscreen",
             "Mouse Sensitivity",
+            "Activate Ability Key",
             "Back",
         ]
         self.selected_index = 0
@@ -54,6 +65,7 @@ class SettingsScreen:
                 "Music Volume",
                 "SFX Volume",
                 "Mouse Sensitivity",
+                "Activate Ability Key",
             }:
                 minus_rect = controls.get("minus")
                 plus_rect = controls.get("plus")
@@ -122,11 +134,17 @@ class SettingsScreen:
             surface.blit(label, (row_rect.x + 16, row_rect.centery - (label.get_height() // 2)))
 
             controls = control_rects.get(index, {})
-            if item in {"Master Volume", "Music Volume", "SFX Volume", "Mouse Sensitivity"}:
+            if item in {
+                "Master Volume",
+                "Music Volume",
+                "SFX Volume",
+                "Mouse Sensitivity",
+                "Activate Ability Key",
+            }:
                 value = (
                     f"{settings.mouse_sensitivity:.1f}"
                     if item == "Mouse Sensitivity"
-                    else str(self._get_volume_value(item, settings))
+                    else self._read_setting_value(item, settings)
                 )
                 self._draw_adjust_buttons(
                     surface=surface,
@@ -187,7 +205,13 @@ class SettingsScreen:
             control_y = row_rect.y + 8
             control_height = row_rect.height - 16
 
-            if item in {"Master Volume", "Music Volume", "SFX Volume", "Mouse Sensitivity"}:
+            if item in {
+                "Master Volume",
+                "Music Volume",
+                "SFX Volume",
+                "Mouse Sensitivity",
+                "Activate Ability Key",
+            }:
                 button_width = max(32, min(44, control_width // 4))
                 minus_rect = pygame.Rect(control_x, control_y, button_width, control_height)
                 plus_rect = pygame.Rect(
@@ -234,16 +258,22 @@ class SettingsScreen:
         rendered_value = body_font.render(value, True, (220, 220, 220))
         surface.blit(rendered_value, rendered_value.get_rect(center=value_rect.center))
 
-    @staticmethod
-    def _get_volume_value(item: str, settings: UserSettings) -> int:
+    def _read_setting_value(self, item: str, settings: UserSettings) -> str:
         if item == "Master Volume":
-            return settings.master_volume
+            return str(settings.master_volume)
         if item == "Music Volume":
-            return settings.music_volume
-        return settings.sfx_volume
+            return str(settings.music_volume)
+        if item == "SFX Volume":
+            return str(settings.sfx_volume)
+        if item == "Activate Ability Key":
+            key_value = str(settings.activate_ability_key).strip().lower()
+            for option_value, display_name in self.ABILITY_KEY_OPTIONS:
+                if option_value == key_value:
+                    return display_name
+            return "Space"
+        return "0"
 
-    @staticmethod
-    def _adjust(item: str, settings: UserSettings, direction: int) -> None:
+    def _adjust(self, item: str, settings: UserSettings, direction: int) -> None:
         if item == "Master Volume":
             settings.master_volume = max(0, min(100, settings.master_volume + (5 * direction)))
         elif item == "Music Volume":
@@ -255,3 +285,19 @@ class SettingsScreen:
         elif item == "Mouse Sensitivity":
             updated = settings.mouse_sensitivity + (0.1 * direction)
             settings.mouse_sensitivity = max(0.2, min(3.0, round(updated, 1)))
+        elif item == "Activate Ability Key":
+            settings.activate_ability_key = self._cycle_ability_key(
+                settings.activate_ability_key,
+                direction,
+            )
+
+    def _cycle_ability_key(self, current_key: str, direction: int) -> str:
+        option_values = [value for value, _ in self.ABILITY_KEY_OPTIONS]
+        if not option_values:
+            return "space"
+
+        normalized = str(current_key).strip().lower()
+        if normalized not in option_values:
+            return option_values[0]
+        current_index = option_values.index(normalized)
+        return option_values[(current_index + direction) % len(option_values)]

@@ -3,6 +3,7 @@ import warnings
 
 import pygame
 
+from game.active_abilities import list_active_abilities, resolve_ability_selection
 from game.audio.audio_manager import AudioManager
 from game.core.app_state import AppScreen, AppState
 from game.core.gameloop import GameLoop
@@ -73,7 +74,10 @@ class GameApp:
         self.body_font = self.ui_fonts.body
         self.small_font = self.ui_fonts.small
 
-        self.game_input = InputHandler(local_player_id=self.local_player_id)
+        self.game_input = InputHandler(
+            local_player_id=self.local_player_id,
+            settings=self.profile.settings,
+        )
         self.menu_input = MenuInputHandler()
 
         self.main_menu = MainMenuScreen()
@@ -85,6 +89,7 @@ class GameApp:
         self.game_over_menu = GameOverScreen()
         self.character_options: list[CharacterOption] = list_character_options()
         self.map_options: list[MapOption] = list_map_options()
+        self.ability_options = list_active_abilities()
         self.app_state.selected_character_id = resolve_selected_id(
             self.character_options,
             SETTINGS.default_player_character_id,
@@ -95,6 +100,9 @@ class GameApp:
             "ashland_map",
             id_getter=lambda option: option.map_id,
         )
+        default_ability, default_variant = resolve_ability_selection("", "")
+        self.app_state.selected_ability_id = default_ability.ability_id
+        self.app_state.selected_ability_variant_id = default_variant.variant_id
 
         self.camera = Camera(
             screen_width=self.screen.get_width(),
@@ -185,6 +193,8 @@ class GameApp:
                 self.body_font,
                 selected_character_name=self._selected_character_name(),
                 selected_map_name=self._selected_map_name(),
+                selected_ability_name=self._selected_ability_name(),
+                selected_variant_name=self._selected_ability_variant_name(),
             )
             self._play_menu_audio_feedback(
                 previous_index=previous_index,
@@ -204,6 +214,14 @@ class GameApp:
                 self._cycle_lobby_map(step=-1)
             elif command == "map_next":
                 self._cycle_lobby_map(step=1)
+            elif command == "ability_prev":
+                self._cycle_lobby_ability(step=-1)
+            elif command == "ability_next":
+                self._cycle_lobby_ability(step=1)
+            elif command == "variant_prev":
+                self._cycle_lobby_ability_variant(step=-1)
+            elif command == "variant_next":
+                self._cycle_lobby_ability_variant(step=1)
             elif command == "start_run":
                 self._start_new_run()
             elif command == "back_main_menu":
@@ -374,8 +392,11 @@ class GameApp:
                 self.body_font,
                 selected_character_name=self._selected_character_name(),
                 selected_map_name=self._selected_map_name(),
+                selected_ability_name=self._selected_ability_name(),
+                selected_variant_name=self._selected_ability_variant_name(),
                 character_count=len(self.character_options),
                 map_count=len(self.map_options),
+                ability_count=len(self.ability_options),
             )
         elif self.app_state.current_screen is AppScreen.SHOP:
             self.shop_menu.render(
@@ -522,6 +543,8 @@ class GameApp:
         self.world.add_player(
             self.local_player_id,
             character_id=selected_character_id,
+            active_ability_id=self.app_state.selected_ability_id,
+            active_ability_variant_id=self.app_state.selected_ability_variant_id,
         )
         self.camera.set_world_bounds(run_world_width, run_world_height)
 
@@ -676,6 +699,23 @@ class GameApp:
                 return option.display_name
         return "None"
 
+    def _selected_ability_name(self) -> str:
+        ability, _ = resolve_ability_selection(
+            self.app_state.selected_ability_id,
+            self.app_state.selected_ability_variant_id,
+        )
+        self.app_state.selected_ability_id = ability.ability_id
+        return ability.display_name
+
+    def _selected_ability_variant_name(self) -> str:
+        ability, variant = resolve_ability_selection(
+            self.app_state.selected_ability_id,
+            self.app_state.selected_ability_variant_id,
+        )
+        self.app_state.selected_ability_id = ability.ability_id
+        self.app_state.selected_ability_variant_id = variant.variant_id
+        return f"{variant.display_name} ({variant.description})"
+
     def _cycle_lobby_character(self, *, step: int) -> None:
         self.app_state.selected_character_id = cycle_selected_id(
             self.character_options,
@@ -691,6 +731,29 @@ class GameApp:
             id_getter=lambda option: option.map_id,
             step=step,
         )
+
+    def _cycle_lobby_ability(self, *, step: int) -> None:
+        if not self.ability_options:
+            return
+        ability_ids = [ability.ability_id for ability in self.ability_options]
+        current_id = self.app_state.selected_ability_id
+        if current_id not in ability_ids:
+            current_id = ability_ids[0]
+        current_index = ability_ids.index(current_id)
+        next_ability = self.ability_options[(current_index + step) % len(self.ability_options)]
+        self.app_state.selected_ability_id = next_ability.ability_id
+        self.app_state.selected_ability_variant_id = next_ability.variants[0].variant_id
+
+    def _cycle_lobby_ability_variant(self, *, step: int) -> None:
+        ability, variant = resolve_ability_selection(
+            self.app_state.selected_ability_id,
+            self.app_state.selected_ability_variant_id,
+        )
+        variants = list(ability.variants)
+        current_index = variants.index(variant)
+        next_variant = variants[(current_index + step) % len(variants)]
+        self.app_state.selected_ability_id = ability.ability_id
+        self.app_state.selected_ability_variant_id = next_variant.variant_id
 
     def _prepare_gameplay_actions(
         self,
@@ -711,6 +774,8 @@ class GameApp:
                 throw=actions.throw,
                 throw_pressed=actions.throw_pressed,
                 throw_held=actions.throw_held,
+                activate_ability=actions.activate_ability,
+                activate_ability_pressed=actions.activate_ability_pressed,
             )
         return transformed
 

@@ -58,7 +58,14 @@ class BottomPlayerHUD:
         content_rect = panel_rect.inflate(-padding * 2, -padding * 2)
         block_height = content_rect.height
 
-        show_portrait, portrait_width, hp_width, cooldown_width, coin_width = self._block_widths(
+        (
+            show_portrait,
+            portrait_width,
+            hp_width,
+            cooldown_width,
+            ability_width,
+            coin_width,
+        ) = self._block_widths(
             content_rect.width,
             gap,
         )
@@ -75,6 +82,12 @@ class BottomPlayerHUD:
         x = self._draw_throw_cooldown(
             surface,
             pygame.Rect(x, content_rect.top, cooldown_width, block_height),
+            player,
+        )
+        x += gap
+        x = self._draw_ability_cooldown(
+            surface,
+            pygame.Rect(x, content_rect.top, ability_width, block_height),
             player,
         )
         x += gap
@@ -110,28 +123,34 @@ class BottomPlayerHUD:
         )
 
     @staticmethod
-    def _block_widths(content_width: int, gap: int) -> tuple[bool, int, int, int, int]:
-        full_min = 78 + 120 + 72 + 96 + (gap * 3)
-        compact_min = 110 + 64 + 88 + (gap * 2)
+    def _block_widths(content_width: int, gap: int) -> tuple[bool, int, int, int, int, int]:
+        full_min = 78 + 120 + 72 + 118 + 96 + (gap * 4)
+        compact_min = 110 + 60 + 92 + 84 + (gap * 3)
 
         if content_width >= full_min:
-            usable = content_width - (gap * 3)
+            usable = content_width - (gap * 4)
             portrait = max(72, min(92, int(usable * 0.16)))
             cooldown = max(72, min(108, int(usable * 0.17)))
-            coin = max(96, min(160, int(usable * 0.24)))
-            hp = usable - portrait - cooldown - coin
+            ability = max(100, min(156, int(usable * 0.24)))
+            coin = max(88, min(160, int(usable * 0.18)))
+            hp = usable - portrait - cooldown - ability - coin
             if hp < 120:
                 deficit = 120 - hp
-                shift_from_coin = min(deficit, max(0, coin - 96))
+                shift_from_ability = min(deficit, max(0, ability - 90))
+                ability -= shift_from_ability
+                hp += shift_from_ability
+                deficit -= shift_from_ability
+                shift_from_coin = min(deficit, max(0, coin - 84))
                 coin -= shift_from_coin
                 hp += shift_from_coin
-            return True, portrait, hp, cooldown, coin
+            return True, portrait, hp, cooldown, ability, coin
 
         if content_width >= compact_min:
-            usable = content_width - (gap * 2)
-            cooldown = max(64, min(100, int(usable * 0.22)))
-            coin = max(88, min(150, int(usable * 0.30)))
-            hp = usable - cooldown - coin
+            usable = content_width - (gap * 3)
+            cooldown = max(58, min(94, int(usable * 0.18)))
+            ability = max(82, min(130, int(usable * 0.28)))
+            coin = max(76, min(140, int(usable * 0.26)))
+            hp = usable - cooldown - ability - coin
             if hp < 110:
                 deficit = 110 - hp
                 shift_from_coin = min(deficit, max(0, coin - 72))
@@ -139,17 +158,23 @@ class BottomPlayerHUD:
                 hp += shift_from_coin
                 deficit -= shift_from_coin
                 if deficit > 0:
+                    shift_from_ability = min(deficit, max(0, ability - 74))
+                    ability -= shift_from_ability
+                    hp += shift_from_ability
+                    deficit -= shift_from_ability
+                if deficit > 0:
                     shift_from_cooldown = min(deficit, max(0, cooldown - 54))
                     cooldown -= shift_from_cooldown
                     hp += shift_from_cooldown
-            return False, 0, hp, cooldown, coin
+            return False, 0, hp, cooldown, ability, coin
 
         # Extremely narrow fallback: keep all blocks visible with reduced widths.
-        usable = max(120, content_width - (gap * 2))
-        cooldown = max(54, int(usable * 0.24))
-        coin = max(72, int(usable * 0.30))
-        hp = max(72, usable - cooldown - coin)
-        return False, 0, hp, cooldown, coin
+        usable = max(160, content_width - (gap * 3))
+        cooldown = max(54, int(usable * 0.18))
+        ability = max(78, int(usable * 0.30))
+        coin = max(68, int(usable * 0.22))
+        hp = max(72, usable - cooldown - ability - coin)
+        return False, 0, hp, cooldown, ability, coin
 
     def _draw_portrait(
         self,
@@ -297,6 +322,72 @@ class BottomPlayerHUD:
         value = self.value_font.render(str(run_coins), True, (245, 245, 245))
         value_rect = value.get_rect(midleft=(icon_rect.right + 8, icon_rect.centery))
         surface.blit(value, value_rect)
+
+    def _draw_ability_cooldown(
+        self,
+        surface: pygame.Surface,
+        block_rect: pygame.Rect,
+        player: dict[str, object],
+    ) -> int:
+        pygame.draw.rect(surface, (26, 30, 36), block_rect, border_radius=8)
+        pygame.draw.rect(surface, (95, 102, 118), block_rect, width=2, border_radius=8)
+
+        ability_payload = player.get("active_ability")
+        if not isinstance(ability_payload, dict):
+            label = self.label_font.render("Ability", True, (210, 212, 218))
+            value = self.value_font.render("None", True, (190, 194, 204))
+            surface.blit(label, label.get_rect(topleft=(block_rect.left + 8, block_rect.top + 8)))
+            surface.blit(value, value.get_rect(topleft=(block_rect.left + 8, block_rect.top + 34)))
+            return block_rect.right
+
+        ability_name = str(ability_payload.get("ability_hud_label", "Ability"))
+        cooldown_total = max(0.001, float(ability_payload.get("cooldown_total_seconds", 0.0)))
+        cooldown_remaining = max(
+            0.0,
+            float(ability_payload.get("cooldown_remaining_seconds", 0.0)),
+        )
+        ratio = max(0.0, min(1.0, cooldown_remaining / cooldown_total))
+        ready = cooldown_remaining <= 0.0
+        active_remaining = max(0.0, float(ability_payload.get("active_remaining_seconds", 0.0)))
+
+        label = self.label_font.render(ability_name, True, (228, 230, 235))
+        surface.blit(label, label.get_rect(topleft=(block_rect.left + 8, block_rect.top + 8)))
+
+        bar_rect = pygame.Rect(
+            block_rect.left + 8,
+            block_rect.top + 36,
+            max(62, block_rect.width - 16),
+            16,
+        )
+        pygame.draw.rect(surface, (46, 50, 60), bar_rect, border_radius=5)
+        pygame.draw.rect(surface, (95, 102, 118), bar_rect, width=1, border_radius=5)
+        if ratio > 0.0:
+            fill_width = max(1, int(round((bar_rect.width - 2) * (1.0 - ratio))))
+            fill_rect = pygame.Rect(
+                bar_rect.left + 1,
+                bar_rect.top + 1,
+                fill_width,
+                max(1, bar_rect.height - 2),
+            )
+            pygame.draw.rect(surface, (112, 124, 146), fill_rect, border_radius=4)
+        elif ready:
+            fill_rect = pygame.Rect(
+                bar_rect.left + 1,
+                bar_rect.top + 1,
+                max(1, bar_rect.width - 2),
+                max(1, bar_rect.height - 2),
+            )
+            pygame.draw.rect(surface, (104, 196, 132), fill_rect, border_radius=4)
+
+        status_text = "Ready" if ready else f"{cooldown_remaining:.1f}s"
+        if active_remaining > 0.0:
+            status_text = f"Active {active_remaining:.1f}s"
+        status = self.value_font.render(status_text, True, (242, 242, 242))
+        surface.blit(
+            status,
+            status.get_rect(midleft=(block_rect.left + 8, block_rect.bottom - 12)),
+        )
+        return block_rect.right
 
     def _get_portrait(self, character_id: str) -> pygame.Surface | None:
         if character_id in self._portrait_cache:

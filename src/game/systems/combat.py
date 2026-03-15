@@ -100,7 +100,7 @@ class CombatSystem:
                 ):
                     continue
 
-                player.take_damage(projectile.damage)
+                world.apply_player_damage(player, projectile.damage)
                 projectile.alive = False
                 break
 
@@ -119,7 +119,7 @@ class CombatSystem:
 
                 if world.handle_enemy_player_contact(enemy, player):
                     continue
-                player.take_damage(enemy.touch_damage)
+                world.apply_player_damage(player, enemy.touch_damage)
 
     @staticmethod
     def _is_in_world_bounds(projectile: Projectile, width: float, height: float) -> bool:

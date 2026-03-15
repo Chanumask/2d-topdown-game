@@ -13,6 +13,8 @@ class PlayerActions:
     throw: bool = False
     throw_pressed: bool = False
     throw_held: bool = False
+    activate_ability: bool = False
+    activate_ability_pressed: bool = False
 
     @property
     def move_x(self) -> float:
@@ -36,6 +38,8 @@ class PlayerActions:
             "throw": self.throw,
             "throw_pressed": self.throw_pressed,
             "throw_held": self.throw_held,
+            "activate_ability": self.activate_ability,
+            "activate_ability_pressed": self.activate_ability_pressed,
         }
 
     @classmethod
@@ -51,6 +55,8 @@ class PlayerActions:
         throw_pressed = bool(payload.get("throw_pressed", False))
         throw_held = bool(payload.get("throw_held", False))
         throw = bool(payload.get("throw", payload.get("shoot", False)))
+        activate_ability_pressed = bool(payload.get("activate_ability_pressed", False))
+        activate_ability = bool(payload.get("activate_ability", activate_ability_pressed))
 
         return cls(
             move_up=bool(payload.get("move_up", False)),
@@ -61,4 +67,6 @@ class PlayerActions:
             throw=(throw or throw_pressed or throw_held),
             throw_pressed=throw_pressed,
             throw_held=throw_held,
+            activate_ability=(activate_ability or activate_ability_pressed),
+            activate_ability_pressed=activate_ability_pressed,
         )

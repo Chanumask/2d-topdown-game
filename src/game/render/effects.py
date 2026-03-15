@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -38,7 +39,7 @@ class EffectSheetDefinition:
 class EffectDefinition:
     effect_id: str
     sheet_key: str
-    frame_sequence: tuple[tuple[int, int], ...]
+    frame_sequence: tuple[tuple[int, int] | tuple[tuple[int, int], ...], ...]
     fps: float = 14.0
     scale_multiple: int = 3
     loop: bool = False
@@ -67,6 +68,10 @@ class ActiveWorldEffect:
     frames: tuple[pygame.Surface, ...]
     fps: float
     loop: bool
+    angle_degrees: float = 0.0
+    travel_distance: float = 0.0
+    travel_duration_seconds: float = 0.0
+    elapsed_seconds: float = 0.0
     frame_index: int = 0
     frame_progress_seconds: float = 0.0
 
@@ -132,6 +137,26 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         scale_multiple=3,
         loop=True,
     ),
+    "active_ability.guardian_spirit.loop": EffectDefinition(
+        effect_id="active_ability.guardian_spirit.loop",
+        sheet_key="green_sheet",
+        frame_sequence=((7, 8), (8, 8)),
+        fps=6.0,
+        scale_multiple=5,
+        loop=True,
+    ),
+    "active_ability.shockwave.activate": EffectDefinition(
+        effect_id="active_ability.shockwave.activate",
+        sheet_key="blue_sheet",
+        frame_sequence=(
+            ((10, 3), (10, 4)),
+            ((11, 3), (11, 4)),
+            ((12, 3), (12, 4)),
+        ),
+        fps=6.0,
+        scale_multiple=6,
+        loop=False,
+    ),
 }
 
 
@@ -169,9 +194,9 @@ class EffectClipLibrary:
 
         clip_frames: list[pygame.Surface] = []
         for frame_coord in definition.frame_sequence:
-            frame = sheet.frames.get(frame_coord)
+            source_frame = self._normalize_source_frame(frame_coord)
+            frame = self._compose_source_frame(sheet, effect_id, source_frame)
             if frame is None:
-                self._warn_once_missing_frame(effect_id, frame_coord)
                 self._clip_cache[effect_id] = None
                 return None
             clip_frames.append(pixelart_upscale_surface(frame, max(1, definition.scale_multiple)))
@@ -183,6 +208,53 @@ class EffectClipLibrary:
         clip = EffectClip(frames=tuple(clip_frames), fps=definition.fps, loop=definition.loop)
         self._clip_cache[effect_id] = clip
         return clip
+
+    def _compose_source_frame(
+        self,
+        sheet: LoadedEffectSheet,
+        effect_id: str,
+        source_frame: tuple[tuple[int, int], ...],
+    ) -> pygame.Surface | None:
+        if not source_frame:
+            return None
+
+        missing_coords: list[tuple[int, int]] = []
+        for coord in source_frame:
+            if coord not in sheet.frames:
+                missing_coords.append(coord)
+        if missing_coords:
+            for coord in missing_coords:
+                self._warn_once_missing_frame(effect_id, coord)
+            return None
+
+        min_col = min(coord[0] for coord in source_frame)
+        max_col = max(coord[0] for coord in source_frame)
+        min_row = min(coord[1] for coord in source_frame)
+        max_row = max(coord[1] for coord in source_frame)
+        frame_size = max(1, int(sheet.definition.frame_size))
+
+        composed_width = (max_col - min_col + 1) * frame_size
+        composed_height = (max_row - min_row + 1) * frame_size
+        composed = pygame.Surface((composed_width, composed_height), pygame.SRCALPHA)
+
+        for col, row in source_frame:
+            tile = sheet.frames[(col, row)]
+            target_x = (col - min_col) * frame_size
+            target_y = (row - min_row) * frame_size
+            composed.blit(tile, (target_x, target_y))
+        return composed
+
+    @staticmethod
+    def _normalize_source_frame(
+        frame_spec: tuple[int, int] | tuple[tuple[int, int], ...],
+    ) -> tuple[tuple[int, int], ...]:
+        if (
+            len(frame_spec) == 2
+            and isinstance(frame_spec[0], int)
+            and isinstance(frame_spec[1], int)
+        ):
+            return (frame_spec,)
+        return tuple(frame_spec)
 
     def sheet_frame_counts(self) -> dict[str, tuple[int, int]]:
         result: dict[str, tuple[int, int]] = {}
@@ -258,6 +330,14 @@ class WorldEffectPlayer:
                 continue
 
             position = self._read_position(payload.get("position"))
+            angle_degrees = self._read_angle(payload.get("angle_degrees"))
+            travel_distance = max(0.0, self._read_float(payload.get("travel_distance")))
+            travel_duration_seconds = max(
+                0.0,
+                self._read_float(payload.get("travel_duration_seconds")),
+            )
+            if travel_distance > 0.0 and travel_duration_seconds <= 0.0:
+                travel_duration_seconds = len(clip.frames) / max(0.01, float(clip.fps))
             instance = ActiveWorldEffect(
                 instance_id=self._next_instance_id,
                 effect_id=effect_id,
@@ -265,6 +345,9 @@ class WorldEffectPlayer:
                 frames=clip.frames,
                 fps=clip.fps,
                 loop=clip.loop,
+                angle_degrees=angle_degrees,
+                travel_distance=travel_distance,
+                travel_duration_seconds=travel_duration_seconds,
             )
             self._active_effects[instance.instance_id] = instance
             self._next_instance_id += 1
@@ -277,10 +360,13 @@ class WorldEffectPlayer:
                 continue
 
             frame = effect.frames[effect.frame_index]
-            center = camera.world_to_screen(effect.position)
+            if abs(effect.angle_degrees) > 0.01:
+                frame = pygame.transform.rotate(frame, -effect.angle_degrees)
+            center = camera.world_to_screen(self._position_for_effect(effect))
             rect = frame.get_rect(center=center)
             screen.blit(frame, rect)
 
+            effect.elapsed_seconds += max(0.0, render_dt)
             if self._advance(effect, render_dt):
                 expired_ids.append(instance_id)
 
@@ -312,3 +398,28 @@ class WorldEffectPlayer:
         if isinstance(payload, dict):
             return (float(payload.get("x", 0.0)), float(payload.get("y", 0.0)))
         return (0.0, 0.0)
+
+    @staticmethod
+    def _read_angle(payload: object) -> float:
+        try:
+            return float(payload)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _read_float(payload: object) -> float:
+        try:
+            return float(payload)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _position_for_effect(effect: ActiveWorldEffect) -> tuple[float, float]:
+        if effect.travel_distance <= 0.0 or effect.travel_duration_seconds <= 0.0:
+            return effect.position
+
+        progress = max(0.0, min(1.0, effect.elapsed_seconds / effect.travel_duration_seconds))
+        radians = math.radians(effect.angle_degrees)
+        offset_x = math.cos(radians) * effect.travel_distance * progress
+        offset_y = math.sin(radians) * effect.travel_distance * progress
+        return (effect.position[0] + offset_x, effect.position[1] + offset_y)

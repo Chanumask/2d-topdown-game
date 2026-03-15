@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pygame
 
+from game.active_abilities import ActiveAbilityDefinition, list_active_abilities
 from game.core.blessings import BlessingDefinition, list_blessings
 from game.core.enemies import EnemyProfile, EnemyTier
 from game.core.enemy_catalog import list_enemy_profiles
@@ -17,6 +18,7 @@ from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
 
 TAB_ENEMIES = "enemies"
 TAB_BLESSINGS = "blessings"
+TAB_ABILITIES = "abilities"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +38,7 @@ class LogbookScreen:
         self.tabs = [
             TabDefinition(TAB_ENEMIES, "Enemies"),
             TabDefinition(TAB_BLESSINGS, "Blessings"),
+            TabDefinition(TAB_ABILITIES, "Abilities"),
         ]
         self.selected_tab_index = 0
         self.focus_area = "grid"
@@ -43,6 +46,7 @@ class LogbookScreen:
         self.grid_selection_by_tab: dict[str, int] = {
             TAB_ENEMIES: 0,
             TAB_BLESSINGS: 0,
+            TAB_ABILITIES: 0,
         }
         self.hover_tab_index: int | None = None
         self.hover_grid_index: int | None = None
@@ -54,6 +58,7 @@ class LogbookScreen:
         self.effect_library = EffectClipLibrary()
         self.enemy_profiles = list_enemy_profiles()
         self.blessings = list_blessings()
+        self.active_abilities = list_active_abilities()
         self._enemy_preview_cache: dict[str, pygame.Surface | None] = {}
         self._ability_effect_animation_states: dict[
             tuple[str, str, str], TimedEffectAnimationState
@@ -202,7 +207,7 @@ class LogbookScreen:
         draw_centered_text(
             surface,
             body_font,
-            "Enemies and blessings discovered in your runs",
+            "Enemies, blessings, and active abilities",
             102,
             (180, 180, 180),
         )
@@ -214,13 +219,18 @@ class LogbookScreen:
             self._ability_effect_animation_states.clear()
             if active_tab == TAB_ENEMIES:
                 self._draw_enemy_overview(surface, profile, body_font, small_font)
-            else:
+            elif active_tab == TAB_BLESSINGS:
                 self._draw_blessing_overview(surface, profile, body_font, small_font)
+            else:
+                self._draw_ability_overview(surface, body_font, small_font)
         elif active_tab == TAB_ENEMIES:
             self._draw_enemy_detail(surface, profile, body_font, small_font, render_dt)
-        else:
+        elif active_tab == TAB_BLESSINGS:
             self._ability_effect_animation_states.clear()
             self._draw_blessing_detail(surface, profile, body_font, small_font)
+        else:
+            self._ability_effect_animation_states.clear()
+            self._draw_ability_detail(surface, profile, body_font, small_font)
 
         back_rect = self._back_rect(surface)
         back_label = "Back to Overview" if self.detail_entry_id is not None else "Back"
@@ -233,13 +243,17 @@ class LogbookScreen:
             hovered=self.hover_back,
         )
         if self.detail_entry_id is None:
-            encountered = (
-                len(profile.logbook.encountered_enemy_ids)
-                if active_tab == TAB_ENEMIES
-                else len(profile.logbook.encountered_blessing_ids)
-            )
-            total = len(self._entries_for_tab(active_tab))
-            progress_text = f"Discovered: {encountered} / {total}"
+            if active_tab == TAB_ENEMIES:
+                discovered = len(profile.logbook.encountered_enemy_ids)
+                total = len(self.enemy_profiles)
+                progress_text = f"Discovered: {discovered} / {total}"
+            elif active_tab == TAB_BLESSINGS:
+                discovered = len(profile.logbook.encountered_blessing_ids)
+                total = len(self.blessings)
+                progress_text = f"Discovered: {discovered} / {total}"
+            else:
+                total = len(self.active_abilities)
+                progress_text = f"Entries: {total} / {total}"
             rendered = small_font.render(progress_text, True, (175, 175, 175))
             surface.blit(rendered, (width - rendered.get_width() - 36, 112))
 
@@ -304,6 +318,29 @@ class LogbookScreen:
                 selected=self.focus_area == "grid" and selected_index == index,
                 hovered=self.hover_grid_index == index,
                 unlocked=encountered,
+            )
+
+    def _draw_ability_overview(
+        self,
+        surface: pygame.Surface,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        rects = self._grid_rects(surface, len(self.active_abilities))
+        selected_index = self.grid_selection_by_tab[TAB_ABILITIES]
+        for index, ability in enumerate(self.active_abilities):
+            self._draw_grid_entry(
+                surface,
+                body_font,
+                small_font,
+                rects[index],
+                title=ability.display_name,
+                subtitle="",
+                sprite=None,
+                selected=self.focus_area == "grid" and selected_index == index,
+                hovered=self.hover_grid_index == index,
+                unlocked=True,
+                accent_color=None,
             )
 
     def _draw_enemy_detail(
@@ -480,6 +517,68 @@ class LogbookScreen:
         )
         self._draw_detail_nav(surface, body_font, profile)
 
+    def _draw_ability_detail(
+        self,
+        surface: pygame.Surface,
+        profile: PlayerProfile,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        if self.detail_entry_id is None:
+            return
+
+        ability = next(
+            (entry for entry in self.active_abilities if entry.ability_id == self.detail_entry_id),
+            None,
+        )
+        if ability is None:
+            self.detail_entry_id = None
+            return
+
+        panel_rect = self._detail_panel_rect(surface)
+        pygame.draw.rect(surface, (30, 34, 42), panel_rect, border_radius=12)
+        pygame.draw.rect(surface, (108, 116, 128), panel_rect, width=2, border_radius=12)
+
+        title_render = body_font.render(ability.display_name, True, (235, 235, 235))
+        surface.blit(title_render, (panel_rect.x + 28, panel_rect.y + 24))
+
+        description_lines = wrap_text(
+            body_font,
+            ability.description,
+            max_width=panel_rect.width - 56,
+        )
+        for index, line in enumerate(description_lines[:2]):
+            rendered = body_font.render(line, True, (220, 220, 220))
+            surface.blit(rendered, (panel_rect.x + 28, panel_rect.y + 58 + (index * 24)))
+
+        variants_title = small_font.render("Variants", True, (180, 180, 180))
+        surface.blit(variants_title, (panel_rect.x + 28, panel_rect.y + 122))
+
+        content_width = panel_rect.width - 56
+        gap = 14
+        card_width = (content_width - (gap * 2)) // 3
+        card_height = max(88, min(116, panel_rect.height - 240))
+        card_top = panel_rect.y + 148
+        for index, variant in enumerate(ability.variants):
+            card_x = panel_rect.x + 28 + (index * (card_width + gap))
+            card_rect = pygame.Rect(card_x, card_top, card_width, card_height)
+            pygame.draw.rect(surface, (32, 36, 44), card_rect, border_radius=8)
+            pygame.draw.rect(surface, (84, 94, 110), card_rect, width=1, border_radius=8)
+
+            variant_lines = wrap_text(
+                small_font,
+                variant.description,
+                max_width=card_rect.width - 20,
+            )
+            for line_index, line in enumerate(variant_lines[:4]):
+                rendered = small_font.render(line, True, (192, 196, 204))
+                surface.blit(
+                    rendered,
+                    (card_rect.x + 10, card_rect.y + 14 + (line_index * 18)),
+                )
+
+        self._draw_detail_nav(surface, body_font, profile)
+
     def _draw_grid_entry(
         self,
         surface: pygame.Surface,
@@ -614,10 +713,15 @@ class LogbookScreen:
             enabled=has_multiple,
         )
 
-    def _entries_for_tab(self, tab_id: str) -> list[EnemyProfile | BlessingDefinition]:
+    def _entries_for_tab(
+        self,
+        tab_id: str,
+    ) -> list[EnemyProfile | BlessingDefinition | ActiveAbilityDefinition]:
         if tab_id == TAB_ENEMIES:
             return self.enemy_profiles
-        return self.blessings
+        if tab_id == TAB_BLESSINGS:
+            return self.blessings
+        return self.active_abilities
 
     def _active_tab_id(self) -> str:
         return self.tabs[self.selected_tab_index].tab_id
@@ -639,6 +743,14 @@ class LogbookScreen:
             if enemy is None or enemy.profile_id not in encountered_enemy_ids:
                 return None
             self.detail_entry_id = enemy.profile_id
+            self.focus_area = "detail_next"
+            return None
+
+        if tab_id == TAB_ABILITIES:
+            ability = entry if isinstance(entry, ActiveAbilityDefinition) else None
+            if ability is None:
+                return None
+            self.detail_entry_id = ability.ability_id
             self.focus_area = "detail_next"
             return None
 
@@ -742,11 +854,13 @@ class LogbookScreen:
                 for enemy in self.enemy_profiles
                 if enemy.profile_id in profile.logbook.encountered_enemy_ids
             ]
-        return [
-            blessing.blessing_id
-            for blessing in self.blessings
-            if blessing.blessing_id in profile.logbook.encountered_blessing_ids
-        ]
+        if self._active_tab_id() == TAB_BLESSINGS:
+            return [
+                blessing.blessing_id
+                for blessing in self.blessings
+                if blessing.blessing_id in profile.logbook.encountered_blessing_ids
+            ]
+        return [ability.ability_id for ability in self.active_abilities]
 
     def _cycle_detail_entry(self, profile: PlayerProfile, *, step: int) -> None:
         discovered_entries = self._discovered_entry_ids_for_active_tab(profile)
@@ -760,7 +874,7 @@ class LogbookScreen:
         self.detail_entry_id = discovered_entries[(current_index + step) % len(discovered_entries)]
 
     def _tab_rects(self, surface: pygame.Surface) -> list[pygame.Rect]:
-        width = 180
+        width = 170
         height = 42
         gap = 16
         total_width = (len(self.tabs) * width) + ((len(self.tabs) - 1) * gap)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pygame
 
+from game.active_abilities import ABILITY_GUARDIAN_SPIRIT
 from game.core.blessings import BLESSING_DAMAGE_AURA, BLESSING_VFX_DAMAGE_AURA
 from game.core.enemy_catalog import get_fallback_enemy_radius
 from game.core.snapshot import WorldSnapshot
@@ -28,6 +29,7 @@ from game.ui.hud import BottomPlayerHUD, TopRunStatsHUD
 ROCK_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock.png"
 COIN_SPRITE_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
 FALLBACK_ENEMY_RADIUS = get_fallback_enemy_radius()
+GUARDIAN_SPIRIT_LOOP_VFX = "active_ability.guardian_spirit.loop"
 
 
 @dataclass(slots=True)
@@ -78,6 +80,7 @@ class Renderer:
         self.projectile_effect_animation_states: dict[
             tuple[int, str], TimedBlessingAnimationState
         ] = {}
+        self.guardian_spirit_animation_states: dict[str, TimedBlessingAnimationState] = {}
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
         self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
@@ -102,6 +105,7 @@ class Renderer:
         self.damage_aura_animation_states.clear()
         self.enemy_effect_animation_states.clear()
         self.projectile_effect_animation_states.clear()
+        self.guardian_spirit_animation_states.clear()
 
     def render(self, snapshot: WorldSnapshot) -> None:
         render_now_seconds = pygame.time.get_ticks() / 1000.0
@@ -114,6 +118,7 @@ class Renderer:
             self.world_effect_player.clear()
             self.enemy_effect_animation_states.clear()
             self.projectile_effect_animation_states.clear()
+            self.guardian_spirit_animation_states.clear()
         self._last_snapshot_tick = snapshot.tick
         self.world_effect_player.consume_events(snapshot.vfx_events)
 
@@ -139,6 +144,7 @@ class Renderer:
         self._draw_projectiles(snapshot, render_dt)
         self._draw_damage_auras(snapshot, render_dt)
         self._draw_players(snapshot, render_dt)
+        self._draw_guardian_spirit_effects(snapshot, render_dt)
         self._draw_world_effects(render_dt)
         self.top_hud.render(self.screen, snapshot)
         self.bottom_hud.render(self.screen, snapshot)
@@ -569,6 +575,53 @@ class Renderer:
             self.camera,
             render_dt,
         )
+
+    def _draw_guardian_spirit_effects(self, snapshot: WorldSnapshot, render_dt: float) -> None:
+        clip = self.world_effect_player.library.get_clip(GUARDIAN_SPIRIT_LOOP_VFX)
+        if clip is None or not clip.frames:
+            self.guardian_spirit_animation_states.clear()
+            return
+
+        active_player_ids: set[str] = set()
+        for player in snapshot.players:
+            if not isinstance(player, dict) or not bool(player.get("alive", True)):
+                continue
+            player_id = str(player.get("player_id", ""))
+            if not player_id:
+                continue
+
+            active_ability = player.get("active_ability")
+            if not isinstance(active_ability, dict):
+                continue
+            if str(active_ability.get("ability_id", "")) != ABILITY_GUARDIAN_SPIRIT:
+                continue
+
+            active_remaining = float(active_ability.get("active_remaining_seconds", 0.0))
+            if active_remaining <= 0.0:
+                continue
+
+            active_player_ids.add(player_id)
+            state = self.guardian_spirit_animation_states.setdefault(
+                player_id,
+                TimedBlessingAnimationState(),
+            )
+            self._advance_looping_animation(
+                state,
+                fps=float(clip.fps),
+                frame_count=len(clip.frames),
+                render_dt=render_dt,
+            )
+
+            frame = clip.frames[state.frame_index]
+            center = self.camera.world_to_screen(self._read_position(player))
+            frame_rect = frame.get_rect(center=center)
+            self.screen.blit(frame, frame_rect)
+
+        self.guardian_spirit_animation_states = {
+            player_id: state
+            for player_id, state in self.guardian_spirit_animation_states.items()
+            if player_id in active_player_ids
+        }
 
     def _draw_blessing_fallback(self, center: tuple[int, int], radius: int) -> None:
         pygame.draw.circle(self.screen, (136, 214, 255), center, radius)
