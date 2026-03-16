@@ -1,27 +1,27 @@
 {
   "profile": {
-    "last_run_coins": 111,
-    "last_run_enemies_killed": 115,
+    "last_run_coins": 846,
+    "last_run_enemies_killed": 866,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 111
+        "player-1": 846
       },
       "enemies_killed_by_player": {
-        "player-1": 90
+        "player-1": 689
       },
-      "enemies_killed_total": 115,
+      "enemies_killed_total": 866,
       "players": [
         "player-1"
       ],
-      "simulation_time": 189.56666666670966,
-      "survival_time_seconds": 189.56666666670966,
-      "tick": 11635,
-      "total_run_coins": 111
+      "simulation_time": 588.183333333127,
+      "survival_time_seconds": 588.183333333127,
+      "tick": 35291,
+      "total_run_coins": 846
     },
-    "last_run_survival_time_seconds": 189.56666666670966,
-    "lifetime_enemies_killed": 903,
-    "lifetime_meta_earned": 723,
-    "lifetime_runs_completed": 28,
+    "last_run_survival_time_seconds": 588.183333333127,
+    "lifetime_enemies_killed": 1769,
+    "lifetime_meta_earned": 1569,
+    "lifetime_runs_completed": 29,
     "logbook": {
       "encountered_blessing_ids": [
         "coin_vacuum",
@@ -35,11 +35,11 @@
         "warped_skull"
       ]
     },
-    "meta_currency": 244,
+    "meta_currency": 99,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",
-      "fullscreen": false,
+      "fullscreen": true,
       "master_volume": 50,
       "mouse_sensitivity": 1.0,
       "music_volume": 25,
@@ -48,7 +48,7 @@
     "upgrades": {
       "fast_hands": 2,
       "health_boost": 3,
-      "heavy_rocks": 1,
+      "heavy_rocks": 4,
       "magnet": 3,
       "quick_boots": 3
     }
