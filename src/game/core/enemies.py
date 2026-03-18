@@ -111,6 +111,9 @@ class EnemyProfile:
     hooks: tuple[EnemyHookDefinition, ...] = ()
     tags: tuple[str, ...] = ()
     spawn_weight: float = 0.0
+    sprite_asset_name: str | None = None
+    sprite_pixel_scale: int | None = None
+    spawn_sfx_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +129,7 @@ ENEMY_ABILITY_RANGED_SHOT = "ranged_shot"
 ENEMY_VFX_FLOATING_EYE_PURPLE = "floating_eye_primed_purple"
 ENEMY_VFX_WARPED_SKULL_SHOT_PURPLE = "warped_skull_shot_purple"
 ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE = "warped_skull_projectile_purple"
+ENEMY_VFX_ELITE_SPAWN_DIRECTION = "elite_spawn_direction"
 
 
 def combine_enemy_stat_modifiers(

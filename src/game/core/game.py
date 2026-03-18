@@ -312,6 +312,7 @@ class GameApp:
             previous_attack_tick, previous_coin_count = self._local_player_progress()
             self.run_loop.advance(frame_dt)
             self._update_logbook_progress_from_world()
+            self._play_world_audio_events()
             current_attack_tick, current_coin_count = self._local_player_progress()
             if current_attack_tick > previous_attack_tick:
                 self.audio.play_player_rock_throw()
@@ -355,6 +356,7 @@ class GameApp:
 
             self.run_loop.advance(frame_dt)
             self._update_logbook_progress_from_world()
+            self._play_world_audio_events()
             self._play_countdown_tick_audio()
 
         elif self.app_state.current_screen is AppScreen.GAME_OVER:
@@ -685,6 +687,16 @@ class GameApp:
 
         if changed:
             self._save_profile()
+
+    def _play_world_audio_events(self) -> None:
+        if self.world is None:
+            return
+
+        for event in self.world.consume_audio_events():
+            sfx_key = str(event.get("sfx_key", "")).strip()
+            if not sfx_key:
+                continue
+            self.audio.play_sfx(sfx_key)
 
     def _local_player_progress(self) -> tuple[int, int]:
         if self.world is None:

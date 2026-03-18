@@ -124,7 +124,7 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
         base_cooldown_seconds=18.0,
         base_stats={
             "duration_seconds": 4.8,
-            "shots_per_second": 5.0,
+            "shots_per_second": 4.0,
             "projectile_damage_multiplier": 1.10,
             "auto_target_range": 500.0,
         },

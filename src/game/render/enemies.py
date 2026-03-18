@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from game.core.enemy_catalog import get_enemy_profiles
 from game.render.characters import ANIM_IDLE, AnimationClip
 from game.render.spritesheet import load_spritesheet_frames
 
@@ -108,21 +108,13 @@ class EnemySpriteLibrary:
 
 def get_enemy_sprite_definitions() -> dict[str, EnemySpriteDefinition]:
     assets_root = Path(__file__).resolve().parents[3] / "assets" / "enemies"
-
     definitions: dict[str, EnemySpriteDefinition] = {}
-    for sheet_path in sorted(assets_root.glob("*.png")):
-        enemy_id = _normalize_enemy_id(sheet_path.stem)
-        definitions[enemy_id] = EnemySpriteDefinition(
-            enemy_id=enemy_id,
-            display_name=enemy_id.replace("_", " ").title(),
-            sheet_path=sheet_path,
+    for profile in get_enemy_profiles().values():
+        asset_name = profile.sprite_asset_name or f"{profile.display_name.replace(' ', '')}.png"
+        definitions[profile.profile_id] = EnemySpriteDefinition(
+            enemy_id=profile.profile_id,
+            display_name=profile.display_name,
+            sheet_path=assets_root / asset_name,
+            pixel_scale=profile.sprite_pixel_scale or DEFAULT_ENEMY_PIXEL_SCALE,
         )
-
     return definitions
-
-
-def _normalize_enemy_id(raw_name: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", raw_name)
-    normalized = re.sub(r"(?<!^)(?=[A-Z])", "_", normalized)
-    normalized = re.sub(r"_+", "_", normalized).strip("_").lower()
-    return normalized or "enemy"

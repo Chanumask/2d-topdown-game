@@ -13,6 +13,7 @@ from game.core.blessings import (
     BLESSING_VFX_SACRED_RENEWAL,
 )
 from game.core.enemies import (
+    ENEMY_VFX_ELITE_SPAWN_DIRECTION,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
     ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
 )
@@ -71,6 +72,9 @@ class ActiveWorldEffect:
     angle_degrees: float = 0.0
     travel_distance: float = 0.0
     travel_duration_seconds: float = 0.0
+    anchor_player_id: str = ""
+    anchor_distance: float = 0.0
+    anchor_angle_degrees: float = 0.0
     elapsed_seconds: float = 0.0
     frame_index: int = 0
     frame_progress_seconds: float = 0.0
@@ -92,6 +96,10 @@ EFFECT_SHEET_CATALOG: dict[str, EffectSheetDefinition] = {
     "purple_sheet": EffectSheetDefinition(
         sheet_key="purple_sheet",
         image_path="assets/effects/purple_effectsheet.png",
+    ),
+    "direction_sheet": EffectSheetDefinition(
+        sheet_key="direction_sheet",
+        image_path="assets/effects/direction.png",
     ),
 }
 
@@ -136,6 +144,14 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         fps=14.0,
         scale_multiple=3,
         loop=True,
+    ),
+    ENEMY_VFX_ELITE_SPAWN_DIRECTION: EffectDefinition(
+        effect_id=ENEMY_VFX_ELITE_SPAWN_DIRECTION,
+        sheet_key="direction_sheet",
+        frame_sequence=((0, 0),),
+        fps=1.0,
+        scale_multiple=3,
+        loop=False,
     ),
     "active_ability.guardian_spirit.loop": EffectDefinition(
         effect_id="active_ability.guardian_spirit.loop",
@@ -336,6 +352,9 @@ class WorldEffectPlayer:
                 0.0,
                 self._read_float(payload.get("travel_duration_seconds")),
             )
+            anchor_player_id = str(payload.get("anchor_player_id", "")).strip()
+            anchor_distance = max(0.0, self._read_float(payload.get("anchor_distance")))
+            anchor_angle_degrees = self._read_angle(payload.get("anchor_angle_degrees"))
             if travel_distance > 0.0 and travel_duration_seconds <= 0.0:
                 travel_duration_seconds = len(clip.frames) / max(0.01, float(clip.fps))
             instance = ActiveWorldEffect(
@@ -348,12 +367,23 @@ class WorldEffectPlayer:
                 angle_degrees=angle_degrees,
                 travel_distance=travel_distance,
                 travel_duration_seconds=travel_duration_seconds,
+                anchor_player_id=anchor_player_id,
+                anchor_distance=anchor_distance,
+                anchor_angle_degrees=anchor_angle_degrees,
             )
             self._active_effects[instance.instance_id] = instance
             self._next_instance_id += 1
 
-    def update_and_draw(self, screen: pygame.Surface, camera: Camera, render_dt: float) -> None:
+    def update_and_draw(
+        self,
+        screen: pygame.Surface,
+        camera: Camera,
+        render_dt: float,
+        *,
+        player_positions: dict[str, tuple[float, float]] | None = None,
+    ) -> None:
         expired_ids: list[int] = []
+        known_player_positions = player_positions or {}
         for instance_id, effect in self._active_effects.items():
             if not effect.frames:
                 expired_ids.append(instance_id)
@@ -362,7 +392,9 @@ class WorldEffectPlayer:
             frame = effect.frames[effect.frame_index]
             if abs(effect.angle_degrees) > 0.01:
                 frame = pygame.transform.rotate(frame, -effect.angle_degrees)
-            center = camera.world_to_screen(self._position_for_effect(effect))
+            center = camera.world_to_screen(
+                self._position_for_effect(effect, known_player_positions)
+            )
             rect = frame.get_rect(center=center)
             screen.blit(frame, rect)
 
@@ -414,7 +446,18 @@ class WorldEffectPlayer:
             return 0.0
 
     @staticmethod
-    def _position_for_effect(effect: ActiveWorldEffect) -> tuple[float, float]:
+    def _position_for_effect(
+        effect: ActiveWorldEffect,
+        player_positions: dict[str, tuple[float, float]],
+    ) -> tuple[float, float]:
+        if effect.anchor_player_id:
+            player_position = player_positions.get(effect.anchor_player_id)
+            if player_position is not None:
+                anchor_radians = math.radians(effect.anchor_angle_degrees)
+                return (
+                    player_position[0] + math.cos(anchor_radians) * effect.anchor_distance,
+                    player_position[1] + math.sin(anchor_radians) * effect.anchor_distance,
+                )
         if effect.travel_distance <= 0.0 or effect.travel_duration_seconds <= 0.0:
             return effect.position
 

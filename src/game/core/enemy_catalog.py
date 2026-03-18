@@ -1,3 +1,4 @@
+from game.audio.audio_assets import SFX_ENEMY_CLAWED_ABOMINATION_SPAWN
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
@@ -25,6 +26,7 @@ CRIMSON_IMP = EnemyProfile(
     hooks=(),
     tags=("ground", "melee"),
     spawn_weight=1.0,
+    sprite_asset_name="CrimsonImp.png",
 )
 
 FLOATING_EYE_SELF_DESTRUCT = EnemyAbilityDefinition(
@@ -54,6 +56,7 @@ FLOATING_EYE = EnemyProfile(
     hooks=(),
     tags=("flying",),
     spawn_weight=0.2,
+    sprite_asset_name="FloatingEye.png",
 )
 
 WARPED_SKULL_RANGED_SHOT = EnemyAbilityDefinition(
@@ -85,6 +88,28 @@ WARPED_SKULL = EnemyProfile(
     hooks=(),
     tags=("flying", "ranged"),
     spawn_weight=0.1,
+    sprite_asset_name="WarpedSkull.png",
+)
+
+CLAWED_ABOMINATION = EnemyProfile(
+    profile_id="clawed_abomination",
+    display_name="Clawed Abomination",
+    tier=EnemyTier.ELITE,
+    stats=EnemyStats(
+        max_health=300,
+        speed=38.0,
+        touch_damage=35,
+        coin_drop_value=20,
+        radius=24.0,
+    ),
+    abilities=(),
+    passive_influences=(),
+    hooks=(),
+    tags=("ground", "melee", "elite"),
+    spawn_weight=0.03,
+    sprite_asset_name="ClawedAbomination.png",
+    sprite_pixel_scale=6,
+    spawn_sfx_key=SFX_ENEMY_CLAWED_ABOMINATION_SPAWN,
 )
 
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id
@@ -93,6 +118,7 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
     CRIMSON_IMP.profile_id: CRIMSON_IMP,
     FLOATING_EYE.profile_id: FLOATING_EYE,
     WARPED_SKULL.profile_id: WARPED_SKULL,
+    CLAWED_ABOMINATION.profile_id: CLAWED_ABOMINATION,
 }
 
 

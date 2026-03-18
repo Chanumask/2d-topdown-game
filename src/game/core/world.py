@@ -9,8 +9,10 @@ from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
+    ENEMY_VFX_ELITE_SPAWN_DIRECTION,
     EnemyAbilityDefinition,
     EnemySpawnRequest,
+    EnemyTier,
 )
 from game.core.enemy_catalog import get_enemy_profile
 from game.core.run_result import RunResult
@@ -73,6 +75,7 @@ class World:
     _pending_session_actions: dict[str, SessionActions] = field(init=False, repr=False)
     _pending_vfx_events: list[dict[str, object]] = field(init=False, repr=False)
     _pending_profile_progress_events: list[dict[str, str]] = field(init=False, repr=False)
+    _pending_audio_events: list[dict[str, str]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._rng = random.Random()
@@ -82,6 +85,7 @@ class World:
         self._pending_session_actions = {}
         self._pending_vfx_events = []
         self._pending_profile_progress_events = []
+        self._pending_audio_events = []
 
         self.spawner = EnemySpawner(
             rng=self._rng,
@@ -352,6 +356,11 @@ class World:
         )
         self.enemies[enemy.entity_id] = enemy
         self._queue_profile_progress_event(kind="enemy", entry_id=spawn_request.profile_id)
+        profile = get_enemy_profile(spawn_request.profile_id)
+        if profile is not None and profile.spawn_sfx_key:
+            self._queue_audio_event(profile.spawn_sfx_key)
+        if spawn_request.tier is EnemyTier.ELITE:
+            self._emit_elite_spawn_indicators(spawn_position)
         self.enemy_director.on_enemy_spawn(self, enemy)
 
     def spawn_projectile(
@@ -404,6 +413,9 @@ class World:
         angle_degrees: float | None = None,
         travel_distance: float | None = None,
         travel_duration_seconds: float | None = None,
+        anchor_player_id: str | None = None,
+        anchor_distance: float | None = None,
+        anchor_angle_degrees: float | None = None,
     ) -> None:
         if not effect_id:
             return
@@ -419,12 +431,23 @@ class World:
             event_payload["travel_distance"] = max(0.0, float(travel_distance))
         if travel_duration_seconds is not None:
             event_payload["travel_duration_seconds"] = max(0.0, float(travel_duration_seconds))
+        if anchor_player_id:
+            event_payload["anchor_player_id"] = str(anchor_player_id)
+        if anchor_distance is not None:
+            event_payload["anchor_distance"] = max(0.0, float(anchor_distance))
+        if anchor_angle_degrees is not None:
+            event_payload["anchor_angle_degrees"] = float(anchor_angle_degrees)
         self._next_vfx_event_id += 1
         self._pending_vfx_events.append(event_payload)
 
     def consume_profile_progress_events(self) -> list[dict[str, str]]:
         events = list(self._pending_profile_progress_events)
         self._pending_profile_progress_events.clear()
+        return events
+
+    def consume_audio_events(self) -> list[dict[str, str]]:
+        events = list(self._pending_audio_events)
+        self._pending_audio_events.clear()
         return events
 
     def activate_coin_vacuum(self, collector_player_id: str) -> None:
@@ -935,6 +958,34 @@ class World:
                 "id": normalized_id,
             }
         )
+
+    def _queue_audio_event(self, sfx_key: str) -> None:
+        normalized_key = str(sfx_key).strip()
+        if not normalized_key:
+            return
+        self._pending_audio_events.append({"sfx_key": normalized_key})
+
+    def _emit_elite_spawn_indicators(self, spawn_position: Vec2) -> None:
+        indicator_distance = 56.0
+        for player_id, player in self.players.items():
+            if not player.alive:
+                continue
+
+            direction = spawn_position - player.position
+            if direction.length_squared() <= 0.0001:
+                target_angle_degrees = 90.0
+            else:
+                target_angle_degrees = math.degrees(math.atan2(direction.y, direction.x))
+
+            snapped_angle_degrees = round(target_angle_degrees / 45.0) * 45.0
+            self.emit_world_vfx(
+                ENEMY_VFX_ELITE_SPAWN_DIRECTION,
+                player.position.copy(),
+                angle_degrees=snapped_angle_degrees - 90.0,
+                anchor_player_id=player_id,
+                anchor_distance=indicator_distance,
+                anchor_angle_degrees=snapped_angle_degrees,
+            )
 
     def _resolve_blocking_for_entity(self, entity: Player | Enemy, previous_position: Vec2) -> None:
         if not self._has_blocking_grid() or not entity.alive:

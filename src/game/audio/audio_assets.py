@@ -26,6 +26,7 @@ SFX_PLAYER_ROCK_THROW = "sfx_player_rock_throw"
 SFX_WORLD_COIN_PICKUP = "sfx_world_coin_pickup"
 SFX_ENEMY_HIT = "sfx_enemy_hit"
 SFX_ENEMY_DEATH = "sfx_enemy_death"
+SFX_ENEMY_CLAWED_ABOMINATION_SPAWN = "sfx_enemy_clawed_abomination_spawn"
 
 MUSIC_ASSETS: dict[str, AudioAsset] = {
     MUSIC_MENU: AudioAsset(
@@ -82,6 +83,12 @@ SFX_ASSETS: dict[str, AudioAsset] = {
     SFX_ENEMY_DEATH: AudioAsset(
         key=SFX_ENEMY_DEATH,
         path=_asset("assets/audio/sfx/enemies/enemy_death.wav"),
+        category="enemies",
+        base_volume=1.0,
+    ),
+    SFX_ENEMY_CLAWED_ABOMINATION_SPAWN: AudioAsset(
+        key=SFX_ENEMY_CLAWED_ABOMINATION_SPAWN,
+        path=_asset("assets/audio/sfx/enemies/clawedabomination_spawn.wav"),
         category="enemies",
         base_volume=1.0,
     ),

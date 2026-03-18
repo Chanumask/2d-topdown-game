@@ -1,27 +1,27 @@
 {
   "profile": {
-    "last_run_coins": 775,
-    "last_run_enemies_killed": 788,
+    "last_run_coins": 117,
+    "last_run_enemies_killed": 99,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 775
+        "player-1": 117
       },
       "enemies_killed_by_player": {
-        "player-1": 337
+        "player-1": 80
       },
-      "enemies_killed_total": 788,
+      "enemies_killed_total": 99,
       "players": [
         "player-1"
       ],
-      "simulation_time": 616.6833333331011,
-      "survival_time_seconds": 616.6833333331011,
-      "tick": 37938,
-      "total_run_coins": 775
+      "simulation_time": 192.98333333337905,
+      "survival_time_seconds": 192.98333333337905,
+      "tick": 11579,
+      "total_run_coins": 117
     },
-    "last_run_survival_time_seconds": 616.6833333331011,
-    "lifetime_enemies_killed": 2574,
-    "lifetime_meta_earned": 2360,
-    "lifetime_runs_completed": 31,
+    "last_run_survival_time_seconds": 192.98333333337905,
+    "lifetime_enemies_killed": 2673,
+    "lifetime_meta_earned": 2477,
+    "lifetime_runs_completed": 32,
     "logbook": {
       "encountered_blessing_ids": [
         "coin_vacuum",
@@ -30,12 +30,13 @@
         "sacred_renewal"
       ],
       "encountered_enemy_ids": [
+        "clawed_abomination",
         "crimson_imp",
         "floating_eye",
         "warped_skull"
       ]
     },
-    "meta_currency": 104,
+    "meta_currency": 221,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",

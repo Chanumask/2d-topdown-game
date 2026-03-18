@@ -121,6 +121,7 @@ class Renderer:
             self.guardian_spirit_animation_states.clear()
         self._last_snapshot_tick = snapshot.tick
         self.world_effect_player.consume_events(snapshot.vfx_events)
+        player_positions = self._snapshot_player_positions(snapshot)
 
         focus_player = next(
             (
@@ -145,7 +146,7 @@ class Renderer:
         self._draw_damage_auras(snapshot, render_dt)
         self._draw_players(snapshot, render_dt)
         self._draw_guardian_spirit_effects(snapshot, render_dt)
-        self._draw_world_effects(render_dt)
+        self._draw_world_effects(render_dt, player_positions)
         self.top_hud.render(self.screen, snapshot)
         self.bottom_hud.render(self.screen, snapshot)
 
@@ -569,11 +570,16 @@ class Renderer:
             if player_id in active_player_ids
         }
 
-    def _draw_world_effects(self, render_dt: float) -> None:
+    def _draw_world_effects(
+        self,
+        render_dt: float,
+        player_positions: dict[str, tuple[float, float]],
+    ) -> None:
         self.world_effect_player.update_and_draw(
             self.screen,
             self.camera,
             render_dt,
+            player_positions=player_positions,
         )
 
     def _draw_guardian_spirit_effects(self, snapshot: WorldSnapshot, render_dt: float) -> None:
@@ -626,6 +632,18 @@ class Renderer:
     def _draw_blessing_fallback(self, center: tuple[int, int], radius: int) -> None:
         pygame.draw.circle(self.screen, (136, 214, 255), center, radius)
         pygame.draw.circle(self.screen, (44, 100, 138), center, radius, width=2)
+
+    @staticmethod
+    def _snapshot_player_positions(snapshot: WorldSnapshot) -> dict[str, tuple[float, float]]:
+        positions: dict[str, tuple[float, float]] = {}
+        for player in snapshot.players:
+            if not isinstance(player, dict):
+                continue
+            player_id = str(player.get("player_id", ""))
+            if not player_id or not bool(player.get("alive", True)):
+                continue
+            positions[player_id] = Renderer._read_position(player)
+        return positions
 
     @staticmethod
     def _read_position(payload: dict[str, object]) -> tuple[float, float]:
