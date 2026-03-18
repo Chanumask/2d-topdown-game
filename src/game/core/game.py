@@ -194,7 +194,9 @@ class GameApp:
                 selected_character_name=self._selected_character_name(),
                 selected_character_id=self.app_state.selected_character_id,
                 selected_map_name=self._selected_map_name(),
+                selected_ability_id=self.app_state.selected_ability_id,
                 selected_ability_name=self._selected_ability_name(),
+                selected_variant_id=self.app_state.selected_ability_variant_id,
                 selected_variant_name=self._selected_ability_variant_name(),
             )
             self._play_menu_audio_feedback(
@@ -223,6 +225,8 @@ class GameApp:
                 self._cycle_lobby_ability_variant(step=-1)
             elif command == "variant_next":
                 self._cycle_lobby_ability_variant(step=1)
+            elif isinstance(command, str) and command.startswith("variant_set:"):
+                self._set_lobby_ability_variant(command.split(":", 1)[1])
             elif command == "start_run":
                 self._start_new_run()
             elif command == "back_main_menu":
@@ -394,11 +398,14 @@ class GameApp:
                 selected_character_name=self._selected_character_name(),
                 selected_character_id=self.app_state.selected_character_id,
                 selected_map_name=self._selected_map_name(),
+                selected_ability_id=self.app_state.selected_ability_id,
                 selected_ability_name=self._selected_ability_name(),
+                selected_variant_id=self.app_state.selected_ability_variant_id,
                 selected_variant_name=self._selected_ability_variant_name(),
                 character_count=len(self.character_options),
                 map_count=len(self.map_options),
                 ability_count=len(self.ability_options),
+                small_font=self.small_font,
             )
         elif self.app_state.current_screen is AppScreen.SHOP:
             self.shop_menu.render(
@@ -756,6 +763,14 @@ class GameApp:
         next_variant = variants[(current_index + step) % len(variants)]
         self.app_state.selected_ability_id = ability.ability_id
         self.app_state.selected_ability_variant_id = next_variant.variant_id
+
+    def _set_lobby_ability_variant(self, variant_id: str) -> None:
+        ability, variant = resolve_ability_selection(
+            self.app_state.selected_ability_id,
+            variant_id,
+        )
+        self.app_state.selected_ability_id = ability.ability_id
+        self.app_state.selected_ability_variant_id = variant.variant_id
 
     def _prepare_gameplay_actions(
         self,
