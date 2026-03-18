@@ -608,21 +608,32 @@ class World:
         if delta.length_squared() <= 0.0:
             return True
 
-        direction = delta.normalized()
         projectile_speed = max(1.0, float(ability.projectile_speed))
         projectile_damage = max(1, int(ability.projectile_damage))
         projectile_ttl = max(0.05, float(ability.projectile_ttl_seconds))
         projectile_radius = max(1.0, float(ability.projectile_radius))
-        self.spawn_projectile(
-            position=enemy.position.copy(),
-            velocity=direction * projectile_speed,
-            owner_player_id="",
-            damage=projectile_damage,
-            ttl_seconds=projectile_ttl,
-            radius=projectile_radius,
-            source_faction="enemy",
-            projectile_effect_id=ability.projectile_effect_id,
-        )
+        burst_angles = tuple(float(angle) for angle in ability.projectile_burst_angles_degrees)
+        if burst_angles:
+            self._spawn_enemy_projectile_burst(
+                enemy,
+                projectile_speed=projectile_speed,
+                projectile_damage=projectile_damage,
+                projectile_ttl=projectile_ttl,
+                projectile_radius=projectile_radius,
+                projectile_effect_id=ability.projectile_effect_id,
+                burst_angles_degrees=burst_angles,
+            )
+        else:
+            self.spawn_projectile(
+                position=enemy.position.copy(),
+                velocity=delta.normalized() * projectile_speed,
+                owner_player_id="",
+                damage=projectile_damage,
+                ttl_seconds=projectile_ttl,
+                radius=projectile_radius,
+                source_faction="enemy",
+                projectile_effect_id=ability.projectile_effect_id,
+            )
         enemy.attack_cooldown_seconds = max(0.05, float(ability.attack_interval_seconds))
         return True
 
@@ -814,6 +825,31 @@ class World:
             if ability.ability_id == ENEMY_ABILITY_RANGED_SHOT:
                 return ability
         return None
+
+    def _spawn_enemy_projectile_burst(
+        self,
+        enemy: Enemy,
+        *,
+        projectile_speed: float,
+        projectile_damage: int,
+        projectile_ttl: float,
+        projectile_radius: float,
+        projectile_effect_id: str | None,
+        burst_angles_degrees: tuple[float, ...],
+    ) -> None:
+        for angle_degrees in burst_angles_degrees:
+            radians = math.radians(angle_degrees)
+            direction = Vec2(math.cos(radians), math.sin(radians))
+            self.spawn_projectile(
+                position=enemy.position.copy(),
+                velocity=direction * projectile_speed,
+                owner_player_id="",
+                damage=projectile_damage,
+                ttl_seconds=projectile_ttl,
+                radius=projectile_radius,
+                source_faction="enemy",
+                projectile_effect_id=projectile_effect_id,
+            )
 
     def _arm_enemy_delayed_explosion(
         self,

@@ -49,6 +49,7 @@ class EnemyAbilityDefinition:
     projectile_radius: float = 0.0
     fire_effect_id: str | None = None
     projectile_effect_id: str | None = None
+    projectile_burst_angles_degrees: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,7 @@ class EnemyProfile:
     hooks: tuple[EnemyHookDefinition, ...] = ()
     tags: tuple[str, ...] = ()
     spawn_weight: float = 0.0
+    min_difficulty_factor: float = 1.0
     sprite_asset_name: str | None = None
     sprite_pixel_scale: int | None = None
     spawn_sfx_key: str | None = None
@@ -130,6 +132,7 @@ ENEMY_VFX_FLOATING_EYE_PURPLE = "floating_eye_primed_purple"
 ENEMY_VFX_WARPED_SKULL_SHOT_PURPLE = "warped_skull_shot_purple"
 ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE = "warped_skull_projectile_purple"
 ENEMY_VFX_ELITE_SPAWN_DIRECTION = "elite_spawn_direction"
+ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE = "elite_burst_projectile_purple"
 
 
 def combine_enemy_stat_modifiers(

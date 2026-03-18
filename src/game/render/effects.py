@@ -13,6 +13,7 @@ from game.core.blessings import (
     BLESSING_VFX_SACRED_RENEWAL,
 )
 from game.core.enemies import (
+    ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
     ENEMY_VFX_ELITE_SPAWN_DIRECTION,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
     ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
@@ -141,6 +142,14 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         effect_id=ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
         sheet_key="purple_sheet",
         frame_sequence=((30, 0), (31, 0), (32, 0), (33, 0), (34, 0), (35, 0)),
+        fps=14.0,
+        scale_multiple=3,
+        loop=True,
+    ),
+    ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE: EffectDefinition(
+        effect_id=ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
+        sheet_key="purple_sheet",
+        frame_sequence=((19, 7), (20, 7), (21, 7), (22, 7)),
         fps=14.0,
         scale_multiple=3,
         loop=True,

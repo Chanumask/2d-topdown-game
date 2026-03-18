@@ -40,7 +40,7 @@ class EnemyDirector:
         self._active_influences: list[ActiveEnemyInfluence] = []
 
     def build_spawn_request(self, world: World, profile_id: str | None = None) -> EnemySpawnRequest:
-        profile = self._resolve_spawn_profile(profile_id)
+        profile = self._resolve_spawn_profile(world, profile_id)
         elapsed = world.simulation_time
         difficulty_modifier = EnemyStatModifier(
             max_health_flat=int(elapsed // 25.0) * 4,
@@ -93,12 +93,15 @@ class EnemyDirector:
             bonus += int(influence.spawn_batch_bonus)
         return max(0, bonus)
 
-    def _resolve_spawn_profile(self, profile_id: str | None) -> EnemyProfile:
+    def _resolve_spawn_profile(self, world: World, profile_id: str | None) -> EnemyProfile:
         if profile_id is not None and profile_id in self.profiles:
             return self.profiles[profile_id]
 
         weighted_profiles = [
-            profile for profile in self.profiles.values() if float(profile.spawn_weight) > 0.0
+            profile
+            for profile in self.profiles.values()
+            if float(profile.spawn_weight) > 0.0
+            and float(world.difficulty_factor) >= float(profile.min_difficulty_factor)
         ]
         if not weighted_profiles:
             return self.profiles[CRIMSON_IMP_PROFILE_ID]

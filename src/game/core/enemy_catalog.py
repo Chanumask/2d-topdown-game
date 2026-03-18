@@ -1,7 +1,8 @@
-from game.audio.audio_assets import SFX_ENEMY_CLAWED_ABOMINATION_SPAWN
+from game.audio.audio_assets import SFX_ENEMY_ELITE_SPAWN
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
+    ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
     ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
     EnemyAbilityDefinition,
@@ -9,6 +10,8 @@ from game.core.enemies import (
     EnemyStats,
     EnemyTier,
 )
+
+ELITE_MIN_DIFFICULTY_FACTOR = 2.0
 
 CRIMSON_IMP = EnemyProfile(
     profile_id="crimson_imp",
@@ -72,6 +75,20 @@ WARPED_SKULL_RANGED_SHOT = EnemyAbilityDefinition(
     projectile_effect_id=ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
 )
 
+POINTED_DEMONSPAWN_BURST_SHOT = EnemyAbilityDefinition(
+    ability_id=ENEMY_ABILITY_RANGED_SHOT,
+    display_name="Void Barrage",
+    description="Fires an 8-way burst of purple projectiles.",
+    attack_interval_seconds=WARPED_SKULL_RANGED_SHOT.attack_interval_seconds,
+    attack_range=WARPED_SKULL_RANGED_SHOT.attack_range,
+    projectile_speed=WARPED_SKULL_RANGED_SHOT.projectile_speed,
+    projectile_damage=WARPED_SKULL_RANGED_SHOT.projectile_damage,
+    projectile_ttl_seconds=WARPED_SKULL_RANGED_SHOT.projectile_ttl_seconds,
+    projectile_radius=WARPED_SKULL_RANGED_SHOT.projectile_radius,
+    projectile_effect_id=ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
+    projectile_burst_angles_degrees=(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0),
+)
+
 WARPED_SKULL = EnemyProfile(
     profile_id="warped_skull",
     display_name="Warped Skull",
@@ -97,7 +114,7 @@ CLAWED_ABOMINATION = EnemyProfile(
     tier=EnemyTier.ELITE,
     stats=EnemyStats(
         max_health=300,
-        speed=38.0,
+        speed=50.0,
         touch_damage=35,
         coin_drop_value=20,
         radius=24.0,
@@ -107,9 +124,32 @@ CLAWED_ABOMINATION = EnemyProfile(
     hooks=(),
     tags=("ground", "melee", "elite"),
     spawn_weight=0.03,
+    min_difficulty_factor=ELITE_MIN_DIFFICULTY_FACTOR,
     sprite_asset_name="ClawedAbomination.png",
     sprite_pixel_scale=6,
-    spawn_sfx_key=SFX_ENEMY_CLAWED_ABOMINATION_SPAWN,
+    spawn_sfx_key=SFX_ENEMY_ELITE_SPAWN,
+)
+
+POINTED_DEMONSPAWN = EnemyProfile(
+    profile_id="pointed_demonspawn",
+    display_name="Pointed Demonspawn",
+    tier=EnemyTier.ELITE,
+    stats=EnemyStats(
+        max_health=CLAWED_ABOMINATION.stats.max_health,
+        speed=CLAWED_ABOMINATION.stats.speed,
+        touch_damage=CLAWED_ABOMINATION.stats.touch_damage,
+        coin_drop_value=CLAWED_ABOMINATION.stats.coin_drop_value,
+        radius=CLAWED_ABOMINATION.stats.radius,
+    ),
+    abilities=(POINTED_DEMONSPAWN_BURST_SHOT,),
+    passive_influences=(),
+    hooks=(),
+    tags=("ground", "ranged", "elite"),
+    spawn_weight=CLAWED_ABOMINATION.spawn_weight,
+    min_difficulty_factor=ELITE_MIN_DIFFICULTY_FACTOR,
+    sprite_asset_name="PointedDemonspawn.png",
+    sprite_pixel_scale=CLAWED_ABOMINATION.sprite_pixel_scale,
+    spawn_sfx_key=SFX_ENEMY_ELITE_SPAWN,
 )
 
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id
@@ -119,6 +159,7 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
     FLOATING_EYE.profile_id: FLOATING_EYE,
     WARPED_SKULL.profile_id: WARPED_SKULL,
     CLAWED_ABOMINATION.profile_id: CLAWED_ABOMINATION,
+    POINTED_DEMONSPAWN.profile_id: POINTED_DEMONSPAWN,
 }
 
 
