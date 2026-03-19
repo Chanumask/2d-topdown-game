@@ -21,12 +21,12 @@ class GameSettings:
 
     projectile_radius: float = 4.0
     projectile_speed: float = 400.0
-    projectile_damage: int = 10
+    projectile_damage: int = 15
     projectile_ttl_seconds: float = 1.3
 
     coin_radius: float = 6.0
     blessing_radius: float = 9.0
-    blessing_drop_rate: float = 0.02
+    blessing_drop_rate: float = 0.03
 
     spawn_base_interval_seconds: float = 2
     spawn_min_interval_seconds: float = 0.45

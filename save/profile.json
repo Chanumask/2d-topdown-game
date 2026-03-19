@@ -1,29 +1,30 @@
 {
   "profile": {
-    "last_run_coins": 801,
-    "last_run_enemies_killed": 487,
+    "last_run_coins": 88,
+    "last_run_enemies_killed": 144,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 801
+        "player-1": 88
       },
       "enemies_killed_by_player": {
-        "player-1": 246
+        "player-1": 112
       },
-      "enemies_killed_total": 487,
+      "enemies_killed_total": 144,
       "players": [
         "player-1"
       ],
-      "simulation_time": 519.5333333331895,
-      "survival_time_seconds": 519.5333333331895,
-      "tick": 31172,
-      "total_run_coins": 801
+      "simulation_time": 350.6333333333431,
+      "survival_time_seconds": 350.6333333333431,
+      "tick": 24455,
+      "total_run_coins": 88
     },
-    "last_run_survival_time_seconds": 519.5333333331895,
-    "lifetime_enemies_killed": 5260,
-    "lifetime_meta_earned": 7353,
-    "lifetime_runs_completed": 35,
+    "last_run_survival_time_seconds": 350.6333333333431,
+    "lifetime_enemies_killed": 5521,
+    "lifetime_meta_earned": 7531,
+    "lifetime_runs_completed": 37,
     "logbook": {
       "encountered_blessing_ids": [
+        "chain_spark",
         "chilling_field",
         "coin_vacuum",
         "damage_aura",
@@ -43,7 +44,7 @@
         "warped_skull"
       ]
     },
-    "meta_currency": 103,
+    "meta_currency": 89,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",
@@ -57,7 +58,7 @@
       "fast_hands": 6,
       "health_boost": 3,
       "heavy_rocks": 6,
-      "magnet": 3,
+      "magnet": 4,
       "quick_boots": 6
     }
   },

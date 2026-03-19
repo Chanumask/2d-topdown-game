@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
 import pygame
 
+from game.core.blessings import (
+    BlessingCategory,
+    BlessingDefinition,
+    RunBoonModifier,
+    list_blessings,
+)
 from game.core.snapshot import WorldSnapshot
+from game.render.blessings import BlessingSpriteLibrary
 from game.render.characters import CharacterSpriteLibrary
 from game.render.fonts import UIFonts
 from game.render.spritesheet import load_image, load_pixelart_image
@@ -12,6 +20,38 @@ from game.render.spritesheet import load_image, load_pixelart_image
 ROCK_ICON_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "Rock.png"
 COIN_ICON_PATH = Path(__file__).resolve().parents[3] / "assets" / "effects" / "coin.png"
 HUD_ROCK_ICON_PIXEL_SCALE = 4
+HUD_PANEL_FILL_ALPHA = 208
+HUD_BOON_PANEL_FILL_ALPHA = 224
+
+
+def _draw_panel(
+    surface: pygame.Surface,
+    rect: pygame.Rect,
+    *,
+    fill_color: tuple[int, int, int],
+    border_color: tuple[int, int, int],
+    border_radius: int,
+    fill_alpha: int = 255,
+    border_width: int = 2,
+) -> None:
+    if fill_alpha >= 255:
+        pygame.draw.rect(surface, fill_color, rect, border_radius=border_radius)
+    else:
+        panel_surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(
+            panel_surface,
+            (*fill_color, max(0, min(255, fill_alpha))),
+            panel_surface.get_rect(),
+            border_radius=border_radius,
+        )
+        surface.blit(panel_surface, rect.topleft)
+    pygame.draw.rect(
+        surface,
+        border_color,
+        rect,
+        width=border_width,
+        border_radius=border_radius,
+    )
 
 
 class BottomPlayerHUD:
@@ -25,9 +65,11 @@ class BottomPlayerHUD:
         self.character_library = character_library
         self.label_font = fonts.hud
         self.value_font = fonts.small
+        self.blessing_library = BlessingSpriteLibrary(world_icon_scale=1)
         self._coin_icon_size = 32
         self._portrait_size = 62
         self._portrait_cache: dict[str, pygame.Surface] = {}
+        self._run_boon_bindings = self._build_run_boon_bindings()
 
         self.rock_icon_hud = load_pixelart_image(
             ROCK_ICON_PATH,
@@ -50,8 +92,15 @@ class BottomPlayerHUD:
             return
 
         panel_rect = self._panel_rect(surface)
-        pygame.draw.rect(surface, (16, 18, 22), panel_rect, border_radius=12)
-        pygame.draw.rect(surface, (86, 96, 110), panel_rect, width=2, border_radius=10)
+        self._draw_active_run_boons(surface, player, panel_rect)
+        _draw_panel(
+            surface,
+            panel_rect,
+            fill_color=(16, 18, 22),
+            border_color=(86, 96, 110),
+            border_radius=12,
+            fill_alpha=HUD_PANEL_FILL_ALPHA,
+        )
 
         padding = 14
         gap = 12
@@ -323,6 +372,158 @@ class BottomPlayerHUD:
         value_rect = value.get_rect(midleft=(icon_rect.right + 8, icon_rect.centery))
         surface.blit(value, value_rect)
 
+    def _draw_active_run_boons(
+        self,
+        surface: pygame.Surface,
+        player: dict[str, object],
+        hud_panel_rect: pygame.Rect,
+    ) -> None:
+        active_boons = self._active_run_boons(player)
+        if not active_boons:
+            return
+
+        icon_size, icon_gap = self._boon_icon_layout(hud_panel_rect.width, len(active_boons))
+        padding = max(8, icon_gap)
+        panel_width = (len(active_boons) * icon_size) + (max(0, len(active_boons) - 1) * icon_gap)
+        panel_rect = pygame.Rect(0, 0, panel_width + padding * 2, icon_size + padding * 2)
+        panel_rect.centerx = hud_panel_rect.centerx
+        panel_rect.bottom = hud_panel_rect.top - 10
+
+        _draw_panel(
+            surface,
+            panel_rect,
+            fill_color=(20, 24, 30),
+            border_color=(86, 96, 110),
+            border_radius=10,
+            fill_alpha=HUD_BOON_PANEL_FILL_ALPHA,
+        )
+
+        mouse_pos = pygame.mouse.get_pos()
+        hovered_name: str | None = None
+        x = panel_rect.left + padding
+        icon_y = panel_rect.top + padding
+        for definition, stack_count in active_boons:
+            icon_rect = pygame.Rect(x, icon_y, icon_size, icon_size)
+            self._draw_boon_icon(surface, icon_rect, definition, stack_count)
+            if icon_rect.collidepoint(mouse_pos):
+                hovered_name = definition.display_name
+            x += icon_size + icon_gap
+
+        if hovered_name is not None:
+            self._draw_boon_tooltip(surface, hovered_name, mouse_pos, panel_rect)
+
+    def _draw_boon_icon(
+        self,
+        surface: pygame.Surface,
+        icon_rect: pygame.Rect,
+        definition: BlessingDefinition,
+        stack_count: int,
+    ) -> None:
+        pygame.draw.rect(surface, (32, 36, 42), icon_rect, border_radius=8)
+        pygame.draw.rect(surface, (96, 104, 120), icon_rect, width=2, border_radius=8)
+
+        icon_padding = max(3, icon_rect.width // 10)
+        icon_target_rect = icon_rect.inflate(-icon_padding * 2, -icon_padding * 2)
+        icon = self._get_boon_icon(definition.blessing_id, icon_target_rect.size)
+        if icon is not None:
+            icon_draw_rect = icon.get_rect(center=icon_target_rect.center)
+            surface.blit(icon, icon_draw_rect)
+        else:
+            pygame.draw.circle(surface, (98, 112, 138), icon_rect.center, icon_rect.width // 3)
+
+        badge_text = self.value_font.render(str(stack_count), True, (250, 250, 252))
+        badge_padding_x = 6
+        badge_rect = pygame.Rect(
+            0,
+            0,
+            max(18, badge_text.get_width() + badge_padding_x * 2),
+            max(18, badge_text.get_height() + 4),
+        )
+        badge_rect.topright = (icon_rect.right - 2, icon_rect.top + 2)
+        pygame.draw.rect(surface, (18, 22, 28), badge_rect, border_radius=8)
+        pygame.draw.rect(surface, (222, 226, 235), badge_rect, width=1, border_radius=8)
+        surface.blit(badge_text, badge_text.get_rect(center=badge_rect.center))
+
+    def _draw_boon_tooltip(
+        self,
+        surface: pygame.Surface,
+        boon_name: str,
+        mouse_pos: tuple[int, int],
+        anchor_rect: pygame.Rect,
+    ) -> None:
+        tooltip_text = self.value_font.render(boon_name, True, (244, 246, 250))
+        padding_x = 10
+        padding_y = 7
+        tooltip_rect = pygame.Rect(
+            0,
+            0,
+            tooltip_text.get_width() + padding_x * 2,
+            tooltip_text.get_height() + padding_y * 2,
+        )
+        tooltip_rect.midbottom = (mouse_pos[0], anchor_rect.top - 6)
+        tooltip_rect.clamp_ip(surface.get_rect().inflate(-8, -8))
+
+        _draw_panel(
+            surface,
+            tooltip_rect,
+            fill_color=(18, 20, 26),
+            border_color=(106, 114, 130),
+            border_radius=8,
+            fill_alpha=236,
+            border_width=1,
+        )
+        surface.blit(tooltip_text, tooltip_text.get_rect(center=tooltip_rect.center))
+
+    def _active_run_boons(
+        self,
+        player: dict[str, object],
+    ) -> list[tuple[BlessingDefinition, int]]:
+        active: list[tuple[BlessingDefinition, int]] = []
+        for definition, stack_field in self._run_boon_bindings:
+            stack_count = self._read_int(player.get(stack_field), default=0)
+            if stack_count > 0:
+                active.append((definition, stack_count))
+        return active
+
+    def _get_boon_icon(
+        self,
+        blessing_id: str,
+        target_size: tuple[int, int],
+    ) -> pygame.Surface | None:
+        base_icon = self.blessing_library.get_icon(blessing_id, scale_multiple=1)
+        if base_icon is None:
+            return None
+        if base_icon.get_size() == target_size:
+            return base_icon
+        return pygame.transform.scale(base_icon, target_size)
+
+    def _boon_icon_layout(self, hud_panel_width: int, boon_count: int) -> tuple[int, int]:
+        available_width = max(160, hud_panel_width - 28)
+        default_icon_size = 36 if hud_panel_width >= 620 else 32
+        gap = 8
+        usable_width = available_width - (max(0, boon_count - 1) * gap) - 16
+        icon_size = max(26, min(default_icon_size, usable_width // max(1, boon_count)))
+        return icon_size, gap
+
+    @staticmethod
+    def _build_run_boon_bindings() -> list[tuple[BlessingDefinition, str]]:
+        bindings: list[tuple[BlessingDefinition, str]] = []
+        for definition in list_blessings():
+            if definition.category is not BlessingCategory.RUN_BOON:
+                continue
+            stack_field = BottomPlayerHUD._run_boon_stack_field(definition.run_boon_modifier)
+            if stack_field is not None:
+                bindings.append((definition, stack_field))
+        return bindings
+
+    @staticmethod
+    def _run_boon_stack_field(modifier: RunBoonModifier) -> str | None:
+        for field in dataclass_fields(RunBoonModifier):
+            value = getattr(modifier, field.name)
+            if int(value) > 0:
+                return field.name
+        return None
+
     def _draw_ability_cooldown(
         self,
         surface: pygame.Surface,
@@ -430,6 +631,13 @@ class BottomPlayerHUD:
         if ratio >= 0.35:
             return (236, 190, 78)
         return (230, 90, 90)
+
+    @staticmethod
+    def _read_int(value: object, default: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
 
 class TopRunStatsHUD:

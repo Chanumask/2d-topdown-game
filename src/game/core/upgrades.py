@@ -75,7 +75,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         cost_scaling=1.55,
         max_level=10,
         effect_type="throw_cooldown_reduction",
-        effect_value_per_level=0.08,
+        effect_value_per_level=0.1,
     ),
     "heavy_rocks": UpgradeDefinition(
         upgrade_id="heavy_rocks",
@@ -86,7 +86,7 @@ UPGRADE_CATALOG: dict[str, UpgradeDefinition] = {
         cost_scaling=1.60,
         max_level=10,
         effect_type="projectile_damage",
-        effect_value_per_level=2.0,
+        effect_value_per_level=5.0,
     ),
     "magnet": UpgradeDefinition(
         upgrade_id="magnet",
