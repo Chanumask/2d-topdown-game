@@ -24,6 +24,15 @@ class EnemySpawner:
         self.timer = base_interval_seconds
 
     def update(self, world: World, dt: float) -> None:
+        boss_profile_id = world.enemy_director.consume_boss_spawn_profile_id(world)
+        if boss_profile_id:
+            self._spawn_enemy(world, profile_id=boss_profile_id)
+            self.timer = self.current_interval(
+                world.simulation_time,
+                interval_multiplier=world.enemy_director.current_spawn_interval_multiplier(world),
+            )
+            return
+
         self.timer -= dt
         spawn_interval = self.current_interval(
             world.simulation_time,
@@ -43,9 +52,9 @@ class EnemySpawner:
         )
         return max(self.min_interval_seconds * 0.25, base_interval * max(0.1, interval_multiplier))
 
-    def _spawn_enemy(self, world: World) -> None:
+    def _spawn_enemy(self, world: World, profile_id: str | None = None) -> None:
         spawn_position = self._random_edge_position(world.world_width, world.world_height)
-        world.spawn_enemy(position=spawn_position)
+        world.spawn_enemy(position=spawn_position, profile_id=profile_id)
 
     def _random_edge_position(self, world_width: float, world_height: float) -> Vec2:
         edge = self.rng.choice(("top", "bottom", "left", "right"))

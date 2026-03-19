@@ -380,7 +380,21 @@ class Renderer:
     def _draw_enemies(self, snapshot: WorldSnapshot, render_dt: float) -> None:
         active_enemy_ids: set[int] = set()
         active_enemy_effect_keys: set[tuple[int, str]] = set()
-        for enemy in snapshot.enemies:
+        tier_order = {
+            "normal": 0,
+            "elite": 1,
+            "boss": 2,
+        }
+        sorted_enemies = sorted(
+            snapshot.enemies,
+            key=lambda enemy: (
+                tier_order.get(str(enemy.get("tier", "normal")), 0)
+                if isinstance(enemy, dict)
+                else 0,
+                int(enemy.get("entity_id", -1)) if isinstance(enemy, dict) else -1,
+            ),
+        )
+        for enemy in sorted_enemies:
             if not isinstance(enemy, dict):
                 continue
 

@@ -5,7 +5,14 @@ import random
 from dataclasses import dataclass, field
 
 from game.active_abilities import ActiveAbilityRuntime
-from game.core.blessings import BLESSING_DAMAGE_AURA, random_blessing_id
+from game.core.blessings import (
+    BLESSING_DAMAGE_AURA,
+    FURY_STACKS_DURATION_SECONDS,
+    GOLDEN_MOMENTUM_DURATION_SECONDS,
+    fury_throw_cooldown_multiplier,
+    golden_momentum_speed_multiplier,
+    random_blessing_id,
+)
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
@@ -44,6 +51,7 @@ class World:
     settings: GameSettings
     world_width: float
     world_height: float
+    active_map_id: str = ""
     blocking_grid: tuple[tuple[bool, ...], ...] | None = None
     blocking_tile_size: float = 32.0
     run_modifiers: RunModifiers = field(default_factory=RunModifiers)
@@ -61,6 +69,7 @@ class World:
     enemies_killed_total: int = 0
     enemies_killed_by_player: dict[str, int] = field(default_factory=dict)
     final_run_result: RunResult | None = None
+    spawned_boss_profile_ids: set[str] = field(default_factory=set)
     session: SessionState = field(default_factory=SessionState)
     spawner: EnemySpawner = field(init=False)
     combat: CombatSystem = field(init=False)
@@ -147,11 +156,13 @@ class World:
             character_id=resolved_character_id,
             position=spawn,
             radius=self.settings.player_radius,
+            base_speed=base_speed,
             speed=base_speed,
             max_health=base_health,
             health=base_health,
             coin_pickup_radius=pickup_radius,
             aim_position=spawn.copy(),
+            base_throw_cooldown_seconds=throw_cooldown,
             throw_cooldown_seconds=throw_cooldown,
             damage_iframe_seconds=self.settings.player_touch_iframe_seconds,
         )
@@ -210,6 +221,7 @@ class World:
 
         # RUNNING and PAUSE_COUNTDOWN both keep gameplay simulation active.
         self.simulation_time += dt
+        self._refresh_player_runtime_stats()
         self._apply_player_actions()
         for player in self.players.values():
             previous_position = player.position.copy()
@@ -291,6 +303,7 @@ class World:
         difficulty = {
             "factor": self.difficulty_factor,
             "spawn_interval_seconds": self.current_spawn_interval,
+            "boss_alive": self.has_alive_boss(),
         }
 
         player_ids = set(self.players)
@@ -368,6 +381,8 @@ class World:
             self._queue_audio_event(profile.spawn_sfx_key)
         if spawn_request.tier is EnemyTier.ELITE:
             self._emit_elite_spawn_indicators(spawn_position)
+        elif spawn_request.tier is EnemyTier.BOSS:
+            self.spawned_boss_profile_ids.add(spawn_request.profile_id)
         self.enemy_director.on_enemy_spawn(self, enemy)
 
     def spawn_projectile(
@@ -501,6 +516,9 @@ class World:
 
         self.enemies_killed_by_player.setdefault(killer_player_id, 0)
         self.enemies_killed_by_player[killer_player_id] += 1
+        killer = self.players.get(killer_player_id)
+        if killer is not None and killer.fury_stacks > 0:
+            killer.fury_remaining_seconds = float(FURY_STACKS_DURATION_SECONDS)
 
     def _drop_enemy_reward(self, position: Vec2, coin_value: int) -> None:
         if self._maybe_spawn_blessing_drop(position):
@@ -710,6 +728,48 @@ class World:
             return
         self.defeat_enemy(enemy, killer_player_id=killer_player_id)
 
+    def has_alive_boss(self) -> bool:
+        return any(
+            enemy.alive and enemy.tier == EnemyTier.BOSS.value
+            for enemy in self.enemies.values()
+        )
+
+    def _refresh_player_runtime_stats(self) -> None:
+        for player in self.players.values():
+            speed_multiplier = 1.0
+            if (
+                player.golden_momentum_stacks > 0
+                and player.golden_momentum_remaining_seconds > 0.0
+            ):
+                speed_multiplier *= golden_momentum_speed_multiplier(
+                    player.golden_momentum_stacks
+                )
+            player.speed = float(player.base_speed) * speed_multiplier
+
+            cooldown_multiplier = 1.0
+            if player.fury_stacks > 0 and player.fury_remaining_seconds > 0.0:
+                cooldown_multiplier = fury_throw_cooldown_multiplier(player.fury_stacks)
+            effective_cooldown = max(
+                0.05,
+                float(player.base_throw_cooldown_seconds) * cooldown_multiplier,
+            )
+            self._set_player_throw_cooldown(player, effective_cooldown)
+
+    @staticmethod
+    def _set_player_throw_cooldown(player: Player, effective_cooldown: float) -> None:
+        previous_cooldown = max(0.05, float(player.throw_cooldown_seconds))
+        remaining_fraction = 0.0
+        if previous_cooldown > 0.0:
+            remaining_fraction = max(
+                0.0,
+                min(1.0, float(player.throw_cooldown_remaining) / previous_cooldown),
+            )
+        player.throw_cooldown_seconds = float(effective_cooldown)
+        player.throw_cooldown_remaining = min(
+            float(effective_cooldown),
+            float(effective_cooldown) * remaining_fraction,
+        )
+
     def _collect_coins(self) -> None:
         for coin in self.coins.values():
             if not coin.alive:
@@ -737,6 +797,8 @@ class World:
                 collector.max_health,
                 collector.health + int(collector.coin_heal_on_pickup),
             )
+        if collector.golden_momentum_stacks > 0:
+            collector.golden_momentum_remaining_seconds = float(GOLDEN_MOMENTUM_DURATION_SECONDS)
         coin.alive = False
         self.coin_vacuum_coin_ids.discard(coin.entity_id)
 

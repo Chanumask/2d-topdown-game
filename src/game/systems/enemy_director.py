@@ -2,6 +2,7 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from game.core.blessings import CHILLING_FIELD_RADIUS, chilling_field_speed_multiplier
 from game.core.enemies import (
     EnemyHookDefinition,
     EnemyHookTrigger,
@@ -10,6 +11,7 @@ from game.core.enemies import (
     EnemyProfile,
     EnemySpawnRequest,
     EnemyStatModifier,
+    EnemyTier,
     apply_enemy_stat_modifier,
     combine_enemy_stat_modifiers,
 )
@@ -29,6 +31,8 @@ class ActiveEnemyInfluence:
 
 
 class EnemyDirector:
+    BOSS_ENCOUNTER_SPAWN_INTERVAL_MULTIPLIER = 3.5
+
     def __init__(
         self,
         rng: random.Random,
@@ -79,6 +83,8 @@ class EnemyDirector:
 
     def current_spawn_interval_multiplier(self, world: World) -> float:
         multiplier = 1.0
+        if self.is_boss_encounter_active(world):
+            multiplier *= self.BOSS_ENCOUNTER_SPAWN_INTERVAL_MULTIPLIER
         for _, influence in self._iter_all_influences(world):
             if influence.target is not EnemyInfluenceTarget.SPAWNER:
                 continue
@@ -99,21 +105,72 @@ class EnemyDirector:
 
         weighted_profiles = [
             profile
-            for profile in self.profiles.values()
-            if float(profile.spawn_weight) > 0.0
-            and float(world.difficulty_factor) >= float(profile.min_difficulty_factor)
+            for profile in self._eligible_regular_spawn_profiles(world)
         ]
         if not weighted_profiles:
             return self.profiles[CRIMSON_IMP_PROFILE_ID]
 
-        total_weight = sum(profile.spawn_weight for profile in weighted_profiles)
+        selected = self._choose_weighted_profile(weighted_profiles)
+        if selected is not None:
+            return selected
+        return weighted_profiles[-1]
+
+    def consume_boss_spawn_profile_id(self, world: World) -> str | None:
+        if self.is_boss_encounter_active(world):
+            return None
+
+        eligible_bosses = [
+            profile
+            for profile in self.profiles.values()
+            if profile.tier is EnemyTier.BOSS
+            and self._profile_allowed_on_current_map(world, profile)
+            and float(profile.spawn_weight) > 0.0
+            and float(world.difficulty_factor) >= float(profile.min_difficulty_factor)
+            and profile.profile_id not in world.spawned_boss_profile_ids
+        ]
+        if not eligible_bosses:
+            return None
+
+        selected = self._choose_weighted_profile(eligible_bosses)
+        return selected.profile_id if selected is not None else eligible_bosses[0].profile_id
+
+    def is_boss_encounter_active(self, world: World) -> bool:
+        return world.has_alive_boss()
+
+    def _eligible_regular_spawn_profiles(self, world: World) -> list[EnemyProfile]:
+        boss_encounter_active = self.is_boss_encounter_active(world)
+        return [
+            profile
+            for profile in self.profiles.values()
+            if profile.tier is not EnemyTier.BOSS
+            and (not boss_encounter_active or profile.tier is EnemyTier.NORMAL)
+            and float(profile.spawn_weight) > 0.0
+            and float(world.difficulty_factor) >= float(profile.min_difficulty_factor)
+            and self._profile_allowed_on_current_map(world, profile)
+        ]
+
+    def _profile_allowed_on_current_map(self, world: World, profile: EnemyProfile) -> bool:
+        if not profile.allowed_map_ids:
+            return True
+        return world.active_map_id in profile.allowed_map_ids
+
+    def _choose_weighted_profile(
+        self,
+        profiles: list[EnemyProfile],
+    ) -> EnemyProfile | None:
+        if not profiles:
+            return None
+        total_weight = sum(float(profile.spawn_weight) for profile in profiles)
+        if total_weight <= 0.0:
+            return None
+
         roll = self.rng.uniform(0.0, total_weight)
         running_total = 0.0
-        for profile in weighted_profiles:
-            running_total += profile.spawn_weight
+        for profile in profiles:
+            running_total += float(profile.spawn_weight)
             if roll <= running_total:
                 return profile
-        return weighted_profiles[-1]
+        return profiles[-1]
 
     def _update_active_influences(self, dt: float) -> None:
         if not self._active_influences:
@@ -182,7 +239,27 @@ class EnemyDirector:
                 continue
             matching_modifiers.append(influence.stat_modifier)
 
+        chilling_modifier = self._player_chilling_field_modifier(world, enemy)
+        if not chilling_modifier.is_neutral():
+            matching_modifiers.append(chilling_modifier)
+
         return combine_enemy_stat_modifiers(matching_modifiers)
+
+    def _player_chilling_field_modifier(self, world: World, enemy: Enemy) -> EnemyStatModifier:
+        strongest_multiplier = 1.0
+        radius_squared = CHILLING_FIELD_RADIUS * CHILLING_FIELD_RADIUS
+        for player in world.players.values():
+            if not player.alive or player.chilling_field_stacks <= 0:
+                continue
+            if (enemy.position - player.position).length_squared() > radius_squared:
+                continue
+            strongest_multiplier = min(
+                strongest_multiplier,
+                chilling_field_speed_multiplier(player.chilling_field_stacks),
+            )
+        if strongest_multiplier >= 1.0:
+            return EnemyStatModifier()
+        return EnemyStatModifier(speed_multiplier=strongest_multiplier)
 
     def _enemy_matches_influence(
         self,

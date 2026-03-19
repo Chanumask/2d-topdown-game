@@ -29,6 +29,14 @@ ENCYCLOPEDIA_ENTRIES: tuple[EncyclopediaEntry, ...] = (
         ),
     ),
     EncyclopediaEntry(
+        entry_id="attack_speed",
+        term="Attack Speed",
+        explanation=(
+            "How often you can attack. In this game it usually means a shorter "
+            "time between rock throws."
+        ),
+    ),
+    EncyclopediaEntry(
         entry_id="blessing",
         term="Blessing",
         explanation=(

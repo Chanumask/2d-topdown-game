@@ -114,8 +114,14 @@ class EnemyProfile:
     tags: tuple[str, ...] = ()
     spawn_weight: float = 0.0
     min_difficulty_factor: float = 1.0
+    allowed_map_ids: tuple[str, ...] = ()
     sprite_asset_name: str | None = None
+    sprite_frame_count: int | None = None
+    sprite_frame_width: int | None = None
+    sprite_frame_height: int | None = None
+    sprite_fps: float | None = None
     sprite_pixel_scale: int | None = None
+    sprite_render_scale: float = 1.0
     spawn_sfx_key: str | None = None
 
 

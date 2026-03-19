@@ -547,6 +547,7 @@ class GameApp:
             settings=SETTINGS,
             world_width=run_world_width,
             world_height=run_world_height,
+            active_map_id=self.app_state.selected_map_id,
             blocking_grid=fixed_map.merged_blocking_grid,
             blocking_tile_size=float(fixed_map.tile_size),
             run_modifiers=run_modifiers,

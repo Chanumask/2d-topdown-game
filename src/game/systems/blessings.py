@@ -6,8 +6,9 @@ from game.core.blessings import (
     BLESSING_COIN_VACUUM,
     BLESSING_DAMAGE_AURA,
     BLESSING_DIVINE_PURGE,
-    BLESSING_HEALING_COIN,
     BLESSING_SACRED_RENEWAL,
+    BlessingCategory,
+    BlessingDefinition,
     get_blessing,
 )
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 class BlessingSystem:
     def apply_blessing(self, world: World, collector_player_id: str, blessing_id: str) -> None:
         definition = get_blessing(blessing_id)
+        if definition is None:
+            return
         animated_effect_id = definition.animated_effect_id if definition is not None else None
 
         if blessing_id == BLESSING_COIN_VACUUM:
@@ -36,8 +39,11 @@ class BlessingSystem:
         if blessing_id == BLESSING_DAMAGE_AURA:
             self._apply_damage_aura(world, collector_player_id)
             return
-        if blessing_id == BLESSING_HEALING_COIN:
-            self._apply_healing_coin(world, collector_player_id, definition.coin_heal_on_pickup)
+        if (
+            definition.category is BlessingCategory.RUN_BOON
+            and not definition.run_boon_modifier.is_neutral()
+        ):
+            self._apply_run_boon(world, collector_player_id, definition)
 
     @staticmethod
     def _apply_coin_vacuum(world: World, collector_player_id: str) -> None:
@@ -68,8 +74,16 @@ class BlessingSystem:
         world.activate_damage_aura(collector_player_id)
 
     @staticmethod
-    def _apply_healing_coin(world: World, collector_player_id: str, amount: int) -> None:
+    def _apply_run_boon(
+        world: World,
+        collector_player_id: str,
+        definition: BlessingDefinition,
+    ) -> None:
         collector = world.players.get(collector_player_id)
-        if collector is None or amount <= 0:
+        if collector is None:
             return
-        collector.coin_heal_on_pickup += int(amount)
+        modifier = definition.run_boon_modifier
+        collector.coin_heal_on_pickup += int(modifier.coin_heal_on_pickup)
+        collector.golden_momentum_stacks += int(modifier.golden_momentum_stacks)
+        collector.fury_stacks += int(modifier.fury_stacks)
+        collector.chilling_field_stacks += int(modifier.chilling_field_stacks)

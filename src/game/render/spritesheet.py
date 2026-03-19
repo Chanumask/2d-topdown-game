@@ -9,6 +9,8 @@ def load_spritesheet_frames(
     path: Path,
     frame_count: int,
     *,
+    frame_width: int | None = None,
+    frame_height: int | None = None,
     scale: float = 1.0,
     smooth: bool = False,
     pixel_scale: int | None = None,
@@ -28,14 +30,25 @@ def load_spritesheet_frames(
         return None
 
     sheet_width, sheet_height = sheet.get_size()
-    frame_width = sheet_width // frame_count
-    if frame_width <= 0:
+    resolved_frame_width = (
+        int(frame_width) if frame_width is not None else sheet_width // frame_count
+    )
+    resolved_frame_height = int(frame_height) if frame_height is not None else sheet_height
+    if resolved_frame_width <= 0 or resolved_frame_height <= 0:
         print(f"[Spritesheet] Invalid frame width in {path}")
+        return None
+    if resolved_frame_width * frame_count > sheet_width or resolved_frame_height > sheet_height:
+        print(f"[Spritesheet] Frame geometry exceeds sheet bounds in {path}")
         return None
 
     frames: list[pygame.Surface] = []
     for index in range(frame_count):
-        frame_rect = pygame.Rect(index * frame_width, 0, frame_width, sheet_height)
+        frame_rect = pygame.Rect(
+            index * resolved_frame_width,
+            0,
+            resolved_frame_width,
+            resolved_frame_height,
+        )
         frame = sheet.subsurface(frame_rect).copy()
         if pixel_scale is not None:
             frame = pixelart_upscale_surface(frame, pixel_scale)

@@ -7,7 +7,7 @@ import pygame
 
 from game.core.enemy_catalog import get_enemy_profiles
 from game.render.characters import ANIM_IDLE, AnimationClip
-from game.render.spritesheet import load_spritesheet_frames, pixelart_upscale_surface
+from game.render.spritesheet import load_spritesheet_frames, pixelart_upscale_surface, scale_surface
 
 DEFAULT_ENEMY_FRAME_COUNT = 4
 DEFAULT_ENEMY_FPS = 8.0
@@ -20,8 +20,11 @@ class EnemySpriteDefinition:
     display_name: str
     sheet_path: Path
     frame_count: int = DEFAULT_ENEMY_FRAME_COUNT
+    frame_width: int | None = None
+    frame_height: int | None = None
     fps: float = DEFAULT_ENEMY_FPS
     pixel_scale: int = DEFAULT_ENEMY_PIXEL_SCALE
+    render_scale: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +99,8 @@ class EnemySpriteLibrary:
         base_frames = load_spritesheet_frames(
             definition.sheet_path,
             definition.frame_count,
+            frame_width=definition.frame_width,
+            frame_height=definition.frame_height,
             pixel_scale=1,
         )
         if not base_frames:
@@ -104,8 +109,12 @@ class EnemySpriteLibrary:
 
         base_frame = base_frames[0]
         base_max_dim = max(1, max(base_frame.get_width(), base_frame.get_height()))
-        scale_multiple = max(1, int(max_size) // base_max_dim)
-        preview_frame = pixelart_upscale_surface(base_frame, scale_multiple)
+        if base_max_dim > int(max_size):
+            preview_scale = float(max_size) / float(base_max_dim)
+            preview_frame = scale_surface(base_frame, scale=preview_scale, smooth=False)
+        else:
+            scale_multiple = max(1, int(max_size) // base_max_dim)
+            preview_frame = pixelart_upscale_surface(base_frame, scale_multiple)
         self._preview_cache[cache_key] = preview_frame
         return preview_frame
 
@@ -113,8 +122,15 @@ class EnemySpriteLibrary:
         idle_frames = load_spritesheet_frames(
             definition.sheet_path,
             definition.frame_count,
+            frame_width=definition.frame_width,
+            frame_height=definition.frame_height,
             pixel_scale=definition.pixel_scale,
         )
+        if idle_frames and definition.render_scale != 1.0:
+            idle_frames = [
+                scale_surface(frame, scale=definition.render_scale, smooth=False)
+                for frame in idle_frames
+            ]
 
         animations: dict[str, AnimationClip] = {}
         if idle_frames:
@@ -144,6 +160,11 @@ def get_enemy_sprite_definitions() -> dict[str, EnemySpriteDefinition]:
             enemy_id=profile.profile_id,
             display_name=profile.display_name,
             sheet_path=assets_root / asset_name,
+            frame_count=profile.sprite_frame_count or DEFAULT_ENEMY_FRAME_COUNT,
+            frame_width=profile.sprite_frame_width,
+            frame_height=profile.sprite_frame_height,
+            fps=profile.sprite_fps or DEFAULT_ENEMY_FPS,
             pixel_scale=profile.sprite_pixel_scale or DEFAULT_ENEMY_PIXEL_SCALE,
+            render_scale=float(profile.sprite_render_scale),
         )
     return definitions

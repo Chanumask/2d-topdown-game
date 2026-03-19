@@ -14,6 +14,7 @@ from game.core.enemies import (
 )
 
 ELITE_MIN_DIFFICULTY_FACTOR = 2.0
+BOSS_MIN_DIFFICULTY_FACTOR = 10.0
 
 CRIMSON_IMP = EnemyProfile(
     profile_id="crimson_imp",
@@ -182,6 +183,32 @@ NEFARIOUS_SCAMP = EnemyProfile(
     spawn_sfx_key=SFX_ENEMY_ELITE_SPAWN,
 )
 
+AEGIS_BOSS = EnemyProfile(
+    profile_id="aegis_boss",
+    display_name="Aegis Boss",
+    tier=EnemyTier.BOSS,
+    stats=EnemyStats(
+        max_health=2400,
+        speed=28.0,
+        touch_damage=50,
+        coin_drop_value=100,
+        radius=52.0,
+    ),
+    abilities=(),
+    passive_influences=(),
+    hooks=(),
+    tags=("ground", "boss", "melee"),
+    spawn_weight=1.0,
+    min_difficulty_factor=BOSS_MIN_DIFFICULTY_FACTOR,
+    sprite_asset_name="AegisBoss.png",
+    sprite_frame_count=14,
+    sprite_frame_width=240,
+    sprite_frame_height=240,
+    sprite_fps=10.0,
+    sprite_pixel_scale=1,
+    sprite_render_scale=0.8,
+)
+
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id
 
 ENEMY_PROFILES: dict[str, EnemyProfile] = {
@@ -191,6 +218,7 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
     CLAWED_ABOMINATION.profile_id: CLAWED_ABOMINATION,
     POINTED_DEMONSPAWN.profile_id: POINTED_DEMONSPAWN,
     NEFARIOUS_SCAMP.profile_id: NEFARIOUS_SCAMP,
+    AEGIS_BOSS.profile_id: AEGIS_BOSS,
 }
 
 
