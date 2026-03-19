@@ -601,6 +601,8 @@ class World:
     ) -> int:
         if amount <= 0 or not enemy.alive:
             return 0
+        if source_player_id is not None and not self.is_enemy_targetable_for_player_attacks(enemy):
+            return 0
 
         health_before = int(enemy.health)
         enemy.take_damage(amount)
@@ -750,6 +752,11 @@ class World:
             for enemy in self.enemies.values()
         )
 
+    def is_enemy_targetable_for_player_attacks(self, enemy: Enemy) -> bool:
+        if not enemy.alive:
+            return False
+        return enemy.active_ability_id != ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH
+
     def _apply_player_hit_run_boons(
         self,
         *,
@@ -845,7 +852,10 @@ class World:
         radius_squared = max(1.0, float(radius)) * max(1.0, float(radius))
         candidates: list[tuple[float, int, Enemy]] = []
         for enemy in self.enemies.values():
-            if not enemy.alive or enemy.entity_id in excluded_enemy_ids:
+            if (
+                not self.is_enemy_targetable_for_player_attacks(enemy)
+                or enemy.entity_id in excluded_enemy_ids
+            ):
                 continue
             distance_squared = (enemy.position - center).length_squared()
             if distance_squared > radius_squared:

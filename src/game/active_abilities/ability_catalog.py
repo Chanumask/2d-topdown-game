@@ -139,7 +139,7 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
                 stat_multipliers={"projectile_damage_multiplier": 1.30},
             ),
         ),
-        activation_vfx_effect_id="active_ability.stone_frenzy.activate",
+        activation_vfx_effect_id=None,
         logbook_preview_icon_path="assets/effects/Rock.png",
     ),
 }

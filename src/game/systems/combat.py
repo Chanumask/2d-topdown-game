@@ -62,7 +62,7 @@ class CombatSystem:
                 continue
 
             for enemy in world.enemies.values():
-                if not enemy.alive:
+                if not world.is_enemy_targetable_for_player_attacks(enemy):
                     continue
                 if not circles_overlap(
                     projectile.position,
@@ -72,13 +72,15 @@ class CombatSystem:
                 ):
                     continue
 
-                world.damage_enemy(
+                damage_dealt = world.damage_enemy(
                     enemy,
                     projectile.damage,
                     killer_player_id=projectile.owner_player_id or None,
                     source_player_id=projectile.owner_player_id or None,
                     trigger_run_boons=True,
                 )
+                if damage_dealt <= 0:
+                    continue
                 projectile.alive = False
                 break
 

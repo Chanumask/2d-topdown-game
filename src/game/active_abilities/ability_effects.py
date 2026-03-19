@@ -26,19 +26,20 @@ def apply_shockwave(world: World, player: Player, stats: dict[str, float]) -> Sh
     half_angle_cos = math.cos(math.radians(cone_degrees * 0.5))
     result = ShockwaveResult()
     for enemy in list(world.enemies.values()):
-        if not enemy.alive:
+        if not world.is_enemy_targetable_for_player_attacks(enemy):
             continue
         if not _enemy_in_cone(player, enemy, attack_direction, max_range, half_angle_cos):
             continue
 
-        world.damage_enemy(
+        damage_dealt = world.damage_enemy(
             enemy,
             damage,
             killer_player_id=player.player_id,
             source_player_id=player.player_id,
             trigger_run_boons=True,
         )
-        result.enemies_hit += 1
+        if damage_dealt > 0:
+            result.enemies_hit += 1
 
     return result
 
@@ -112,7 +113,7 @@ def _resolve_frenzy_direction(world: World, player: Player, stats: dict[str, flo
     nearest_distance_sq = float("inf")
 
     for enemy in world.enemies.values():
-        if not enemy.alive:
+        if not world.is_enemy_targetable_for_player_attacks(enemy):
             continue
         to_enemy = enemy.position - player.position
         distance_sq = to_enemy.length_squared()
