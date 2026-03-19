@@ -19,6 +19,7 @@ class Player(Entity):
     last_attack_tick: int = -1
     damage_iframe_seconds: float = 0.4
     damage_iframe_remaining: float = 0.0
+    coin_heal_on_pickup: int = 0
 
     def update(self, dt: float, world_width: float, world_height: float) -> None:
         self.position.x += self.velocity.x * dt
@@ -72,6 +73,7 @@ class Player(Entity):
                 "last_attack_tick": int(self.last_attack_tick),
                 "damage_iframe_seconds": float(self.damage_iframe_seconds),
                 "damage_iframe_remaining": float(self.damage_iframe_remaining),
+                "coin_heal_on_pickup": int(self.coin_heal_on_pickup),
             }
         )
         return payload
@@ -107,4 +109,5 @@ class Player(Entity):
             last_attack_tick=int(payload.get("last_attack_tick", -1)),
             damage_iframe_seconds=float(payload.get("damage_iframe_seconds", 0.4)),
             damage_iframe_remaining=float(payload.get("damage_iframe_remaining", 0.0)),
+            coin_heal_on_pickup=int(payload.get("coin_heal_on_pickup", 0)),
         )

@@ -674,6 +674,11 @@ class World:
     def _collect_coin_for_player(self, coin: Coin, collector: Player) -> None:
         collector.coins += coin.value
         self.total_coins_collected += coin.value
+        if collector.coin_heal_on_pickup > 0 and collector.alive:
+            collector.health = min(
+                collector.max_health,
+                collector.health + int(collector.coin_heal_on_pickup),
+            )
         coin.alive = False
         self.coin_vacuum_coin_ids.discard(coin.entity_id)
 

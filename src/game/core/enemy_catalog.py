@@ -195,7 +195,19 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
 
 
 def list_enemy_profiles() -> list[EnemyProfile]:
-    return sorted(ENEMY_PROFILES.values(), key=lambda profile: profile.display_name.lower())
+    tier_order = {
+        EnemyTier.NORMAL: 0,
+        EnemyTier.ELITE: 1,
+        EnemyTier.BOSS: 2,
+    }
+    return sorted(
+        ENEMY_PROFILES.values(),
+        key=lambda profile: (
+            tier_order.get(profile.tier, 99),
+            profile.display_name.lower(),
+            profile.profile_id,
+        ),
+    )
 
 
 def get_enemy_profiles() -> dict[str, EnemyProfile]:

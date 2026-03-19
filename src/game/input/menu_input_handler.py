@@ -23,13 +23,20 @@ class MenuInputHandler:
                     actions.navigate_right = True
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     actions.select = True
-                elif event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                elif event.key == pygame.K_ESCAPE:
                     actions.back = True
+                elif event.key == pygame.K_BACKSPACE:
+                    actions.text_backspace = True
+                    actions.back = True
+            elif event.type == pygame.TEXTINPUT:
+                actions.text_input += event.text
             elif event.type == pygame.MOUSEMOTION:
                 actions.mouse_moved = True
                 actions.mouse_position = (int(event.pos[0]), int(event.pos[1]))
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 actions.mouse_left_click = True
                 actions.mouse_position = (int(event.pos[0]), int(event.pos[1]))
+            elif event.type == pygame.MOUSEWHEEL:
+                actions.scroll_y += int(event.y)
 
         return actions

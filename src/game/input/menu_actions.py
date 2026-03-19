@@ -13,3 +13,6 @@ class MenuActions:
     mouse_position: tuple[int, int] | None = None
     mouse_moved: bool = False
     mouse_left_click: bool = False
+    scroll_y: int = 0
+    text_input: str = ""
+    text_backspace: bool = False

@@ -6,6 +6,7 @@ from game.core.blessings import (
     BLESSING_COIN_VACUUM,
     BLESSING_DAMAGE_AURA,
     BLESSING_DIVINE_PURGE,
+    BLESSING_HEALING_COIN,
     BLESSING_SACRED_RENEWAL,
     get_blessing,
 )
@@ -34,6 +35,9 @@ class BlessingSystem:
             return
         if blessing_id == BLESSING_DAMAGE_AURA:
             self._apply_damage_aura(world, collector_player_id)
+            return
+        if blessing_id == BLESSING_HEALING_COIN:
+            self._apply_healing_coin(world, collector_player_id, definition.coin_heal_on_pickup)
 
     @staticmethod
     def _apply_coin_vacuum(world: World, collector_player_id: str) -> None:
@@ -62,3 +66,10 @@ class BlessingSystem:
     @staticmethod
     def _apply_damage_aura(world: World, collector_player_id: str) -> None:
         world.activate_damage_aura(collector_player_id)
+
+    @staticmethod
+    def _apply_healing_coin(world: World, collector_player_id: str, amount: int) -> None:
+        collector = world.players.get(collector_player_id)
+        if collector is None or amount <= 0:
+            return
+        collector.coin_heal_on_pickup += int(amount)
