@@ -76,6 +76,8 @@ class CombatSystem:
                     enemy,
                     projectile.damage,
                     killer_player_id=projectile.owner_player_id or None,
+                    source_player_id=projectile.owner_player_id or None,
+                    trigger_run_boons=True,
                 )
                 projectile.alive = False
                 break

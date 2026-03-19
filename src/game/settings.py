@@ -25,14 +25,8 @@ class GameSettings:
     projectile_ttl_seconds: float = 1.3
 
     coin_radius: float = 6.0
-    coin_value: int = 1
-    coin_vacuum_pull_speed: float = 1200.0
     blessing_radius: float = 9.0
     blessing_drop_rate: float = 0.02
-    damage_aura_duration_seconds: float = 20.0
-    damage_aura_radius: float = 96.0
-    damage_aura_tick_interval_seconds: float = 0.5
-    damage_aura_damage_per_tick: int = 20
 
     spawn_base_interval_seconds: float = 2
     spawn_min_interval_seconds: float = 0.45

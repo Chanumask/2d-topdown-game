@@ -27,6 +27,8 @@ class Player(Entity):
     fury_stacks: int = 0
     fury_remaining_seconds: float = 0.0
     chilling_field_stacks: int = 0
+    chain_spark_stacks: int = 0
+    impact_pulse_stacks: int = 0
 
     def update(self, dt: float, world_width: float, world_height: float) -> None:
         self.position.x += self.velocity.x * dt
@@ -95,6 +97,8 @@ class Player(Entity):
                 "fury_stacks": int(self.fury_stacks),
                 "fury_remaining_seconds": float(self.fury_remaining_seconds),
                 "chilling_field_stacks": int(self.chilling_field_stacks),
+                "chain_spark_stacks": int(self.chain_spark_stacks),
+                "impact_pulse_stacks": int(self.impact_pulse_stacks),
             }
         )
         return payload
@@ -145,4 +149,6 @@ class Player(Entity):
             fury_stacks=int(payload.get("fury_stacks", 0)),
             fury_remaining_seconds=float(payload.get("fury_remaining_seconds", 0.0)),
             chilling_field_stacks=int(payload.get("chilling_field_stacks", 0)),
+            chain_spark_stacks=int(payload.get("chain_spark_stacks", 0)),
+            impact_pulse_stacks=int(payload.get("impact_pulse_stacks", 0)),
         )

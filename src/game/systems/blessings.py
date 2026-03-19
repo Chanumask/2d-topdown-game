@@ -11,6 +11,7 @@ from game.core.blessings import (
     BlessingDefinition,
     get_blessing,
 )
+from game.core.enemies import EnemyTier
 
 if TYPE_CHECKING:
     from game.core.world import World
@@ -21,7 +22,7 @@ class BlessingSystem:
         definition = get_blessing(blessing_id)
         if definition is None:
             return
-        animated_effect_id = definition.animated_effect_id if definition is not None else None
+        animated_effect_id = definition.animated_effect_id
 
         if blessing_id == BLESSING_COIN_VACUUM:
             self._apply_coin_vacuum(world, collector_player_id)
@@ -65,8 +66,22 @@ class BlessingSystem:
     ) -> None:
         alive_enemies = [enemy for enemy in world.enemies.values() if enemy.alive]
         for enemy in alive_enemies:
+            if enemy.tier == EnemyTier.BOSS.value:
+                continue
+
             if animated_effect_id is not None:
                 world.emit_world_vfx(animated_effect_id, enemy.position.copy())
+
+            if enemy.tier == EnemyTier.ELITE.value:
+                elite_damage = max(1, (int(enemy.health) + 1) // 2)
+                world.damage_enemy(
+                    enemy,
+                    elite_damage,
+                    killer_player_id=collector_player_id,
+                    trigger_run_boons=False,
+                )
+                continue
+
             world.defeat_enemy(enemy, killer_player_id=collector_player_id)
 
     @staticmethod
@@ -87,3 +102,5 @@ class BlessingSystem:
         collector.golden_momentum_stacks += int(modifier.golden_momentum_stacks)
         collector.fury_stacks += int(modifier.fury_stacks)
         collector.chilling_field_stacks += int(modifier.chilling_field_stacks)
+        collector.chain_spark_stacks += int(modifier.chain_spark_stacks)
+        collector.impact_pulse_stacks += int(modifier.impact_pulse_stacks)

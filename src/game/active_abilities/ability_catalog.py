@@ -24,7 +24,6 @@ class ActiveAbilityDefinition:
     hud_label: str
     base_cooldown_seconds: float
     base_stats: dict[str, float]
-    difficulty_scaling: dict[str, float]
     variants: tuple[ActiveAbilityVariant, ...]
     activation_vfx_effect_id: str | None = None
     logbook_preview_effect_id: str | None = None
@@ -44,10 +43,6 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             "heal_duration_seconds": 4.0,
             "heal_total": 36.0,
             "damage_reduction_ratio": 1.0,
-        },
-        difficulty_scaling={
-            "invulnerability_seconds": 0.15,
-            "heal_total": 0.80,
         },
         variants=(
             ActiveAbilityVariant(
@@ -84,10 +79,6 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             "range": 152.0,
             "cone_degrees": 72.0,
             "damage": 42.0,
-        },
-        difficulty_scaling={
-            "damage": 1.0,
-            "range": 0.20,
         },
         variants=(
             ActiveAbilityVariant(
@@ -127,11 +118,6 @@ ABILITY_CATALOG: dict[str, ActiveAbilityDefinition] = {
             "shots_per_second": 4.0,
             "projectile_damage_multiplier": 1.10,
             "auto_target_range": 500.0,
-        },
-        difficulty_scaling={
-            "shots_per_second": 0.45,
-            "projectile_damage_multiplier": 0.55,
-            "duration_seconds": 0.20,
         },
         variants=(
             ActiveAbilityVariant(
@@ -195,18 +181,12 @@ def resolve_ability_selection(
 def build_scaled_stats(
     ability: ActiveAbilityDefinition,
     variant: ActiveAbilityVariant,
-    difficulty_factor: float,
 ) -> dict[str, float]:
     stats: dict[str, float] = {}
-    progression = max(0.0, float(difficulty_factor) - 1.0)
     for key, base_value in ability.base_stats.items():
         scaled_value = float(base_value)
         multiplier = float(variant.stat_multipliers.get(key, 1.0))
         scaled_value *= max(0.01, multiplier)
-
-        scaling_factor = float(ability.difficulty_scaling.get(key, 0.0))
-        if scaling_factor != 0.0:
-            scaled_value *= max(0.01, 1.0 + (progression * scaling_factor))
 
         stats[key] = scaled_value
 

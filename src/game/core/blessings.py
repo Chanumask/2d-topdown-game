@@ -34,6 +34,8 @@ class RunBoonModifier:
     golden_momentum_stacks: int = 0
     fury_stacks: int = 0
     chilling_field_stacks: int = 0
+    chain_spark_stacks: int = 0
+    impact_pulse_stacks: int = 0
 
     def is_neutral(self) -> bool:
         return (
@@ -41,7 +43,22 @@ class RunBoonModifier:
             and self.golden_momentum_stacks == 0
             and self.fury_stacks == 0
             and self.chilling_field_stacks == 0
+            and self.chain_spark_stacks == 0
+            and self.impact_pulse_stacks == 0
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CoinVacuumConfig:
+    pull_speed: float = 1200.0
+
+
+@dataclass(frozen=True, slots=True)
+class DamageAuraConfig:
+    duration_seconds: float = 20.0
+    radius: float = 96.0
+    tick_interval_seconds: float = 0.5
+    damage_per_tick: int = 50
 
 
 BLESSING_COIN_VACUUM = "coin_vacuum"
@@ -52,6 +69,8 @@ BLESSING_HEALING_COIN = "healing_coin"
 BLESSING_GOLDEN_MOMENTUM = "golden_momentum"
 BLESSING_FURY_STACKS = "fury_stacks"
 BLESSING_CHILLING_FIELD = "chilling_field"
+BLESSING_CHAIN_SPARK = "chain_spark"
+BLESSING_IMPACT_PULSE = "impact_pulse"
 BLESSING_VFX_SACRED_RENEWAL = "blessing_sacred_renewal_green"
 BLESSING_VFX_DIVINE_PURGE = "blessing_divine_purge_red"
 BLESSING_VFX_DAMAGE_AURA = "blessing_damage_aura_blue"
@@ -63,6 +82,16 @@ FURY_STACKS_DURATION_SECONDS = 3.0
 CHILLING_FIELD_RADIUS = 80.0
 CHILLING_FIELD_SLOW_PER_STACK = 0.06
 CHILLING_FIELD_MIN_SPEED_MULTIPLIER = 0.5
+CHAIN_SPARK_PROC_CHANCE_PER_STACK = 0.06
+CHAIN_SPARK_MAX_PROC_CHANCE = 0.50
+CHAIN_SPARK_RANGE = 100.0
+CHAIN_SPARK_MAX_SECONDARY_TARGETS = 2
+CHAIN_SPARK_DAMAGE_MULTIPLIER = 0.50
+IMPACT_PULSE_BASE_RADIUS = 40.0
+IMPACT_PULSE_RADIUS_PER_STACK = 10.0
+IMPACT_PULSE_DAMAGE_MULTIPLIER = 0.50
+COIN_VACUUM_CONFIG = CoinVacuumConfig()
+DAMAGE_AURA_CONFIG = DamageAuraConfig()
 
 
 BLESSING_CATALOG: dict[str, BlessingDefinition] = {
@@ -85,7 +114,10 @@ BLESSING_CATALOG: dict[str, BlessingDefinition] = {
     BLESSING_DIVINE_PURGE: BlessingDefinition(
         blessing_id=BLESSING_DIVINE_PURGE,
         display_name="Divine Purge",
-        description="Remove all alive enemies and trigger their normal drops.",
+        description=(
+            "Defeat normal enemies, deal half current health to elites, and leave bosses "
+            "unaffected."
+        ),
         icon_path="assets/blessings/divine_purge.png",
         category=BlessingCategory.INSTANT,
         animated_effect_id=BLESSING_VFX_DIVINE_PURGE,
@@ -130,6 +162,28 @@ BLESSING_CATALOG: dict[str, BlessingDefinition] = {
         category=BlessingCategory.RUN_BOON,
         run_boon_modifier=RunBoonModifier(chilling_field_stacks=1),
     ),
+    BLESSING_CHAIN_SPARK: BlessingDefinition(
+        blessing_id=BLESSING_CHAIN_SPARK,
+        display_name="Chain Spark",
+        description=(
+            "Hits have a 6% chance per stack to chain 50% damage to nearby enemies, "
+            "up to 50% chance."
+        ),
+        icon_path="assets/blessings/chain_spark.png",
+        category=BlessingCategory.RUN_BOON,
+        run_boon_modifier=RunBoonModifier(chain_spark_stacks=1),
+    ),
+    BLESSING_IMPACT_PULSE: BlessingDefinition(
+        blessing_id=BLESSING_IMPACT_PULSE,
+        display_name="Impact Pulse",
+        description=(
+            "Hits create a splash pulse that deals 50% damage to nearby enemies. "
+            "Pulse radius increases by 10 per stack."
+        ),
+        icon_path="assets/blessings/impact_pulse.png",
+        category=BlessingCategory.RUN_BOON,
+        run_boon_modifier=RunBoonModifier(impact_pulse_stacks=1),
+    ),
 }
 
 
@@ -168,6 +222,16 @@ def chilling_field_speed_multiplier(stack_count: int) -> float:
         CHILLING_FIELD_MIN_SPEED_MULTIPLIER,
         1.0 - (CHILLING_FIELD_SLOW_PER_STACK * safe_stacks),
     )
+
+
+def chain_spark_proc_chance(stack_count: int) -> float:
+    safe_stacks = max(0, int(stack_count))
+    return min(CHAIN_SPARK_MAX_PROC_CHANCE, CHAIN_SPARK_PROC_CHANCE_PER_STACK * safe_stacks)
+
+
+def impact_pulse_radius(stack_count: int) -> float:
+    safe_stacks = max(0, int(stack_count))
+    return IMPACT_PULSE_BASE_RADIUS + (IMPACT_PULSE_RADIUS_PER_STACK * safe_stacks)
 
 
 def random_blessing_id(rng: random.Random) -> str | None:

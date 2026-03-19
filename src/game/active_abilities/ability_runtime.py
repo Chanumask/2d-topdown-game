@@ -67,7 +67,7 @@ class ActiveAbilityRuntime:
             return False
 
         ability, variant = resolve_ability_selection(state.ability_id, state.variant_id)
-        stats = build_scaled_stats(ability, variant, world.difficulty_factor)
+        stats = build_scaled_stats(ability, variant)
 
         activated = False
         if ability.ability_id == ABILITY_GUARDIAN_SPIRIT:
@@ -125,7 +125,7 @@ class ActiveAbilityRuntime:
                 continue
 
             ability, variant = resolve_ability_selection(state.ability_id, state.variant_id)
-            stats = build_scaled_stats(ability, variant, world.difficulty_factor)
+            stats = build_scaled_stats(ability, variant)
             previous_remaining = state.active_remaining_seconds
             state.active_remaining_seconds = max(0.0, state.active_remaining_seconds - dt)
             active_dt = min(previous_remaining, dt)
@@ -149,7 +149,7 @@ class ActiveAbilityRuntime:
         if state.active_remaining_seconds <= 0.0:
             return damage
 
-        stats = build_scaled_stats(ability, variant, world.difficulty_factor)
+        stats = build_scaled_stats(ability, variant)
         reduction_ratio = max(0.0, min(1.0, float(stats.get("damage_reduction_ratio", 1.0))))
         reduced = int(round(float(damage) * (1.0 - reduction_ratio)))
         return max(0, reduced)
@@ -170,7 +170,6 @@ class ActiveAbilityRuntime:
             "cooldown_remaining_seconds": float(state.cooldown_remaining_seconds),
             "active_remaining_seconds": float(state.active_remaining_seconds),
             "ready": state.cooldown_remaining_seconds <= 0.0,
-            "difficulty_factor": float(world.difficulty_factor),
         }
 
     @staticmethod

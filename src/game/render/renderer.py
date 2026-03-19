@@ -5,7 +5,11 @@ from pathlib import Path
 import pygame
 
 from game.active_abilities import ABILITY_GUARDIAN_SPIRIT
-from game.core.blessings import BLESSING_DAMAGE_AURA, BLESSING_VFX_DAMAGE_AURA
+from game.core.blessings import (
+    BLESSING_DAMAGE_AURA,
+    BLESSING_VFX_DAMAGE_AURA,
+    DAMAGE_AURA_CONFIG,
+)
 from game.core.enemy_catalog import get_fallback_enemy_radius
 from game.core.snapshot import WorldSnapshot
 from game.render.blessings import BlessingSpriteLibrary
@@ -625,7 +629,7 @@ class Renderer:
             )
 
             frame = aura_clip.frames[state.frame_index]
-            aura_radius = float(blessing.get("radius", self.settings.damage_aura_radius))
+            aura_radius = float(blessing.get("radius", DAMAGE_AURA_CONFIG.radius))
             frame = self._scaled_damage_aura_frame(frame, aura_radius)
             frame_rect = frame.get_rect(center=self.camera.world_to_screen(position))
             self.screen.blit(frame, frame_rect)

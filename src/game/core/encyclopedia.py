@@ -54,6 +54,22 @@ ENCYCLOPEDIA_ENTRIES: tuple[EncyclopediaEntry, ...] = (
         ),
     ),
     EncyclopediaEntry(
+        entry_id="boss",
+        term="Boss",
+        explanation=(
+            "A special enemy tier that appears at higher Difficulty. Only one "
+            "boss can be alive at a time."
+        ),
+    ),
+    EncyclopediaEntry(
+        entry_id="boss_encounter",
+        term="Boss Encounter",
+        explanation=(
+            "The phase while a boss is alive. Regular spawns are reduced and "
+            "elite spawns are suppressed until the boss dies."
+        ),
+    ),
+    EncyclopediaEntry(
         entry_id="coin",
         term="Coin",
         explanation=(

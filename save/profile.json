@@ -1,35 +1,40 @@
 {
   "profile": {
-    "last_run_coins": 3771,
-    "last_run_enemies_killed": 1921,
+    "last_run_coins": 801,
+    "last_run_enemies_killed": 487,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 3771
+        "player-1": 801
       },
       "enemies_killed_by_player": {
-        "player-1": 1701
+        "player-1": 246
       },
-      "enemies_killed_total": 1921,
+      "enemies_killed_total": 487,
       "players": [
         "player-1"
       ],
-      "simulation_time": 1054.4666666660364,
-      "survival_time_seconds": 1054.4666666660364,
-      "tick": 63719,
-      "total_run_coins": 3771
+      "simulation_time": 519.5333333331895,
+      "survival_time_seconds": 519.5333333331895,
+      "tick": 31172,
+      "total_run_coins": 801
     },
-    "last_run_survival_time_seconds": 1054.4666666660364,
-    "lifetime_enemies_killed": 4773,
-    "lifetime_meta_earned": 6552,
-    "lifetime_runs_completed": 34,
+    "last_run_survival_time_seconds": 519.5333333331895,
+    "lifetime_enemies_killed": 5260,
+    "lifetime_meta_earned": 7353,
+    "lifetime_runs_completed": 35,
     "logbook": {
       "encountered_blessing_ids": [
+        "chilling_field",
         "coin_vacuum",
         "damage_aura",
         "divine_purge",
+        "fury_stacks",
+        "golden_momentum",
+        "healing_coin",
         "sacred_renewal"
       ],
       "encountered_enemy_ids": [
+        "aegis_boss",
         "clawed_abomination",
         "crimson_imp",
         "floating_eye",
@@ -38,22 +43,22 @@
         "warped_skull"
       ]
     },
-    "meta_currency": 4296,
+    "meta_currency": 103,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",
-      "fullscreen": false,
+      "fullscreen": true,
       "master_volume": 40,
       "mouse_sensitivity": 1.0,
       "music_volume": 25,
       "sfx_volume": 35
     },
     "upgrades": {
-      "fast_hands": 2,
+      "fast_hands": 6,
       "health_boost": 3,
-      "heavy_rocks": 5,
+      "heavy_rocks": 6,
       "magnet": 3,
-      "quick_boots": 3
+      "quick_boots": 6
     }
   },
   "schema_version": 1

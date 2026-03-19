@@ -7,10 +7,18 @@ from dataclasses import dataclass, field
 from game.active_abilities import ActiveAbilityRuntime
 from game.core.blessings import (
     BLESSING_DAMAGE_AURA,
+    CHAIN_SPARK_DAMAGE_MULTIPLIER,
+    CHAIN_SPARK_MAX_SECONDARY_TARGETS,
+    CHAIN_SPARK_RANGE,
+    COIN_VACUUM_CONFIG,
+    DAMAGE_AURA_CONFIG,
     FURY_STACKS_DURATION_SECONDS,
     GOLDEN_MOMENTUM_DURATION_SECONDS,
+    IMPACT_PULSE_DAMAGE_MULTIPLIER,
+    chain_spark_proc_chance,
     fury_throw_cooldown_multiplier,
     golden_momentum_speed_multiplier,
+    impact_pulse_radius,
     random_blessing_id,
 )
 from game.core.enemies import (
@@ -281,7 +289,7 @@ class World:
                 "player_id": player_id,
                 "blessing_id": BLESSING_DAMAGE_AURA,
                 "remaining_seconds": aura.remaining_seconds,
-                "radius": float(self.settings.damage_aura_radius),
+                "radius": float(DAMAGE_AURA_CONFIG.radius),
             }
             for player_id, aura in sorted(self.active_damage_auras.items())
             if aura.remaining_seconds > 0.0
@@ -489,8 +497,8 @@ class World:
             return
 
         self.active_damage_auras[collector_player_id] = DamageAuraState(
-            remaining_seconds=float(self.settings.damage_aura_duration_seconds),
-            tick_cooldown_seconds=max(0.05, float(self.settings.damage_aura_tick_interval_seconds)),
+            remaining_seconds=float(DAMAGE_AURA_CONFIG.duration_seconds),
+            tick_cooldown_seconds=max(0.05, float(DAMAGE_AURA_CONFIG.tick_interval_seconds)),
         )
 
     def defeat_enemy(self, enemy: Enemy, killer_player_id: str | None) -> None:
@@ -588,6 +596,8 @@ class World:
         amount: int,
         *,
         killer_player_id: str | None,
+        source_player_id: str | None = None,
+        trigger_run_boons: bool = False,
     ) -> int:
         if amount <= 0 or not enemy.alive:
             return 0
@@ -607,6 +617,12 @@ class World:
                 "tier": str(enemy.tier),
             }
         )
+        if trigger_run_boons and source_player_id:
+            self._apply_player_hit_run_boons(
+                source_player_id=source_player_id,
+                primary_enemy=enemy,
+                damage_dealt=damage_dealt,
+            )
         if not enemy.alive:
             self.resolve_enemy_damage_defeat(enemy, killer_player_id=killer_player_id)
         return damage_dealt
@@ -734,6 +750,111 @@ class World:
             for enemy in self.enemies.values()
         )
 
+    def _apply_player_hit_run_boons(
+        self,
+        *,
+        source_player_id: str,
+        primary_enemy: Enemy,
+        damage_dealt: int,
+    ) -> None:
+        player = self.players.get(source_player_id)
+        if player is None or not player.alive or damage_dealt <= 0:
+            return
+
+        if player.impact_pulse_stacks > 0:
+            self._apply_impact_pulse(
+                source_player_id=source_player_id,
+                primary_enemy=primary_enemy,
+                damage_dealt=damage_dealt,
+                stack_count=player.impact_pulse_stacks,
+            )
+        if player.chain_spark_stacks > 0:
+            self._maybe_apply_chain_spark(
+                source_player_id=source_player_id,
+                primary_enemy=primary_enemy,
+                damage_dealt=damage_dealt,
+                stack_count=player.chain_spark_stacks,
+            )
+
+    def _apply_impact_pulse(
+        self,
+        *,
+        source_player_id: str,
+        primary_enemy: Enemy,
+        damage_dealt: int,
+        stack_count: int,
+    ) -> None:
+        splash_damage = max(1, int(round(float(damage_dealt) * IMPACT_PULSE_DAMAGE_MULTIPLIER)))
+        radius = max(1.0, float(impact_pulse_radius(stack_count)))
+        targets = self._sorted_enemies_within_radius(
+            center=primary_enemy.position,
+            radius=radius,
+            excluded_enemy_ids={primary_enemy.entity_id},
+        )
+        for enemy in targets:
+            self.damage_enemy(
+                enemy,
+                splash_damage,
+                killer_player_id=source_player_id,
+                source_player_id=source_player_id,
+                trigger_run_boons=False,
+            )
+
+    def _maybe_apply_chain_spark(
+        self,
+        *,
+        source_player_id: str,
+        primary_enemy: Enemy,
+        damage_dealt: int,
+        stack_count: int,
+    ) -> None:
+        proc_chance = max(0.0, min(1.0, float(chain_spark_proc_chance(stack_count))))
+        if proc_chance <= 0.0 or self._rng.random() >= proc_chance:
+            return
+
+        chain_damage = max(1, int(round(float(damage_dealt) * CHAIN_SPARK_DAMAGE_MULTIPLIER)))
+        hit_enemy_ids = {primary_enemy.entity_id}
+        current_source = primary_enemy
+        for _ in range(CHAIN_SPARK_MAX_SECONDARY_TARGETS):
+            candidates = self._sorted_enemies_within_radius(
+                center=current_source.position,
+                radius=CHAIN_SPARK_RANGE,
+                excluded_enemy_ids=hit_enemy_ids,
+            )
+            if not candidates:
+                return
+
+            next_target = candidates[0]
+            hit_enemy_ids.add(next_target.entity_id)
+            self.damage_enemy(
+                next_target,
+                chain_damage,
+                killer_player_id=source_player_id,
+                source_player_id=source_player_id,
+                trigger_run_boons=False,
+            )
+            current_source = next_target
+
+    def _sorted_enemies_within_radius(
+        self,
+        *,
+        center: Vec2,
+        radius: float,
+        excluded_enemy_ids: set[int],
+    ) -> list[Enemy]:
+        radius_squared = max(1.0, float(radius)) * max(1.0, float(radius))
+        candidates: list[tuple[float, int, Enemy]] = []
+        for enemy in self.enemies.values():
+            if not enemy.alive or enemy.entity_id in excluded_enemy_ids:
+                continue
+            distance_squared = (enemy.position - center).length_squared()
+            if distance_squared > radius_squared:
+                continue
+            candidates.append((distance_squared, enemy.entity_id, enemy))
+
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        return [enemy for _, _, enemy in candidates]
+
     def _refresh_player_runtime_stats(self) -> None:
         for player in self.players.values():
             speed_multiplier = 1.0
@@ -817,7 +938,7 @@ class World:
             self.coin_vacuum_target_player_id = None
             return
 
-        pull_speed = max(1.0, float(self.settings.coin_vacuum_pull_speed))
+        pull_speed = max(1.0, float(COIN_VACUUM_CONFIG.pull_speed))
         for coin_id in list(self.coin_vacuum_coin_ids):
             coin = self.coins.get(coin_id)
             if coin is None or not coin.alive:
@@ -842,7 +963,7 @@ class World:
             return
 
         expired_player_ids: list[str] = []
-        tick_interval = max(0.05, float(self.settings.damage_aura_tick_interval_seconds))
+        tick_interval = max(0.05, float(DAMAGE_AURA_CONFIG.tick_interval_seconds))
         for player_id, aura in self.active_damage_auras.items():
             player = self.players.get(player_id)
             if player is None or not player.alive:
@@ -865,8 +986,8 @@ class World:
             self.active_damage_auras.pop(player_id, None)
 
     def _apply_damage_aura_tick(self, player_id: str, player: Player) -> None:
-        damage = max(1, int(self.settings.damage_aura_damage_per_tick))
-        aura_radius = max(1.0, float(self.settings.damage_aura_radius))
+        damage = max(1, int(DAMAGE_AURA_CONFIG.damage_per_tick))
+        aura_radius = max(1.0, float(DAMAGE_AURA_CONFIG.radius))
         for enemy in list(self.enemies.values()):
             if not enemy.alive:
                 continue
