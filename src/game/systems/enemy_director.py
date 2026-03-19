@@ -163,6 +163,9 @@ class EnemyDirector:
     def _modifiers_for_enemy(self, world: World, enemy: Enemy) -> EnemyStatModifier:
         matching_modifiers: list[EnemyStatModifier] = []
         for source_enemy_id, influence in self._iter_all_influences(world):
+            source_enemy = (
+                world.enemies.get(source_enemy_id) if source_enemy_id is not None else None
+            )
             if influence.target not in (
                 EnemyInfluenceTarget.ALL_ENEMIES,
                 EnemyInfluenceTarget.OTHER_ENEMIES,
@@ -173,7 +176,7 @@ class EnemyDirector:
                 and source_enemy_id == enemy.entity_id
             ):
                 continue
-            if not self._enemy_matches_influence(enemy, influence):
+            if not self._enemy_matches_influence(enemy, influence, source_enemy):
                 continue
             if influence.stat_modifier.is_neutral():
                 continue
@@ -181,7 +184,12 @@ class EnemyDirector:
 
         return combine_enemy_stat_modifiers(matching_modifiers)
 
-    def _enemy_matches_influence(self, enemy: Enemy, influence: EnemyInfluenceDefinition) -> bool:
+    def _enemy_matches_influence(
+        self,
+        enemy: Enemy,
+        influence: EnemyInfluenceDefinition,
+        source_enemy: Enemy | None,
+    ) -> bool:
         if influence.target_tiers and enemy.tier not in {
             tier.value for tier in influence.target_tiers
         }:
@@ -192,6 +200,14 @@ class EnemyDirector:
             return False
         if influence.excluded_tags and enemy_tags.intersection(influence.excluded_tags):
             return False
+        if influence.radius is not None:
+            if source_enemy is None or not source_enemy.alive:
+                return False
+            radius = max(0.0, float(influence.radius))
+            if radius <= 0.0:
+                return False
+            if (enemy.position - source_enemy.position).length_squared() > radius * radius:
+                return False
         return True
 
     def _run_hooks(

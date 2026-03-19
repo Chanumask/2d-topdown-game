@@ -14,7 +14,7 @@ from game.input.menu_actions import MenuActions
 from game.render.blessings import BlessingSpriteLibrary
 from game.render.effects import EffectClipLibrary
 from game.render.enemies import EnemySpriteLibrary
-from game.render.spritesheet import load_pixelart_image, pixelart_upscale_surface
+from game.render.spritesheet import load_pixelart_image
 from game.ui.widgets import draw_centered_text, hovered_index, wrap_text
 
 TAB_ENEMIES = "enemies"
@@ -290,7 +290,9 @@ class LogbookScreen:
                 rects[index],
                 title=enemy_profile.display_name if encountered else "Unknown",
                 subtitle="",
-                sprite=self._enemy_preview(enemy_profile.profile_id) if encountered else None,
+                sprite=self._enemy_preview(enemy_profile.profile_id, target_size=56)
+                if encountered
+                else None,
                 selected=self.focus_area == "grid" and selected_index == index,
                 hovered=self.hover_grid_index == index,
                 unlocked=encountered,
@@ -389,7 +391,7 @@ class LogbookScreen:
         title_render = body_font.render(enemy.display_name, True, (235, 235, 235))
         surface.blit(title_render, (panel_rect.x + 28, panel_rect.y + 24))
 
-        sprite = self._enemy_preview(enemy.profile_id)
+        sprite = self._enemy_preview(enemy.profile_id, target_size=104)
         if sprite is not None:
             sprite_rect = sprite.get_rect(center=(panel_rect.x + 116, panel_rect.y + 118))
             surface.blit(sprite, sprite_rect)
@@ -797,17 +799,13 @@ class LogbookScreen:
                 self.focus_area = "back"
         self.grid_selection_by_tab[tab_id] = current
 
-    def _enemy_preview(self, enemy_id: str) -> pygame.Surface | None:
-        if enemy_id in self._enemy_preview_cache:
-            return self._enemy_preview_cache[enemy_id]
+    def _enemy_preview(self, enemy_id: str, *, target_size: int) -> pygame.Surface | None:
+        cache_key = f"{enemy_id}:{int(target_size)}"
+        if cache_key in self._enemy_preview_cache:
+            return self._enemy_preview_cache[cache_key]
 
-        clip = self.enemy_library.get_animation_clip(enemy_id)
-        if clip is None or not clip.frames:
-            self._enemy_preview_cache[enemy_id] = None
-            return None
-
-        preview = pixelart_upscale_surface(clip.frames[0], 2)
-        self._enemy_preview_cache[enemy_id] = preview
+        preview = self.enemy_library.get_preview_sprite(enemy_id, max_size=target_size)
+        self._enemy_preview_cache[cache_key] = preview
         return preview
 
     def _ability_preview(

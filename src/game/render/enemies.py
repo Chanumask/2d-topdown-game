@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pygame
+
 from game.core.enemy_catalog import get_enemy_profiles
 from game.render.characters import ANIM_IDLE, AnimationClip
-from game.render.spritesheet import load_spritesheet_frames
+from game.render.spritesheet import load_spritesheet_frames, pixelart_upscale_surface
 
 DEFAULT_ENEMY_FRAME_COUNT = 4
 DEFAULT_ENEMY_FPS = 8.0
@@ -33,6 +35,7 @@ class EnemySpriteLibrary:
         self.definitions = definitions or get_enemy_sprite_definitions()
         self.assets: dict[str, LoadedEnemyAssets] = {}
         self._ordered_enemy_ids: list[str] = []
+        self._preview_cache: dict[tuple[str, int], pygame.Surface | None] = {}
 
         for enemy_id, definition in self.definitions.items():
             loaded = self._load_enemy_assets(definition)
@@ -79,6 +82,32 @@ class EnemySpriteLibrary:
     @property
     def loaded_enemy_count(self) -> int:
         return len(self._ordered_enemy_ids)
+
+    def get_preview_sprite(self, enemy_id: str, *, max_size: int) -> pygame.Surface | None:
+        cache_key = (enemy_id, max(1, int(max_size)))
+        if cache_key in self._preview_cache:
+            return self._preview_cache[cache_key]
+
+        definition = self.definitions.get(enemy_id)
+        if definition is None:
+            self._preview_cache[cache_key] = None
+            return None
+
+        base_frames = load_spritesheet_frames(
+            definition.sheet_path,
+            definition.frame_count,
+            pixel_scale=1,
+        )
+        if not base_frames:
+            self._preview_cache[cache_key] = None
+            return None
+
+        base_frame = base_frames[0]
+        base_max_dim = max(1, max(base_frame.get_width(), base_frame.get_height()))
+        scale_multiple = max(1, int(max_size) // base_max_dim)
+        preview_frame = pixelart_upscale_surface(base_frame, scale_multiple)
+        self._preview_cache[cache_key] = preview_frame
+        return preview_frame
 
     def _load_enemy_assets(self, definition: EnemySpriteDefinition) -> LoadedEnemyAssets:
         idle_frames = load_spritesheet_frames(

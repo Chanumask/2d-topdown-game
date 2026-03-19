@@ -6,7 +6,9 @@ from game.core.enemies import (
     ENEMY_VFX_FLOATING_EYE_PURPLE,
     ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
     EnemyAbilityDefinition,
+    EnemyInfluenceDefinition,
     EnemyProfile,
+    EnemyStatModifier,
     EnemyStats,
     EnemyTier,
 )
@@ -89,6 +91,12 @@ POINTED_DEMONSPAWN_BURST_SHOT = EnemyAbilityDefinition(
     projectile_burst_angles_degrees=(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0),
 )
 
+NEFARIOUS_SCAMP_SPEED_AURA = EnemyInfluenceDefinition(
+    influence_id="nefarious_scamp_speed_aura",
+    radius=160.0,
+    stat_modifier=EnemyStatModifier(speed_multiplier=1.25),
+)
+
 WARPED_SKULL = EnemyProfile(
     profile_id="warped_skull",
     display_name="Warped Skull",
@@ -113,7 +121,7 @@ CLAWED_ABOMINATION = EnemyProfile(
     display_name="Clawed Abomination",
     tier=EnemyTier.ELITE,
     stats=EnemyStats(
-        max_health=300,
+        max_health=400,
         speed=50.0,
         touch_damage=35,
         coin_drop_value=20,
@@ -135,20 +143,42 @@ POINTED_DEMONSPAWN = EnemyProfile(
     display_name="Pointed Demonspawn",
     tier=EnemyTier.ELITE,
     stats=EnemyStats(
-        max_health=CLAWED_ABOMINATION.stats.max_health,
-        speed=CLAWED_ABOMINATION.stats.speed,
-        touch_damage=CLAWED_ABOMINATION.stats.touch_damage,
-        coin_drop_value=CLAWED_ABOMINATION.stats.coin_drop_value,
-        radius=CLAWED_ABOMINATION.stats.radius,
+        max_health=300,
+        speed=50.0,
+        touch_damage=35,
+        coin_drop_value=20,
+        radius=24.0,
     ),
     abilities=(POINTED_DEMONSPAWN_BURST_SHOT,),
     passive_influences=(),
     hooks=(),
     tags=("ground", "ranged", "elite"),
-    spawn_weight=CLAWED_ABOMINATION.spawn_weight,
+    spawn_weight=0.03,
     min_difficulty_factor=ELITE_MIN_DIFFICULTY_FACTOR,
     sprite_asset_name="PointedDemonspawn.png",
-    sprite_pixel_scale=CLAWED_ABOMINATION.sprite_pixel_scale,
+    sprite_pixel_scale=6,
+    spawn_sfx_key=SFX_ENEMY_ELITE_SPAWN,
+)
+
+NEFARIOUS_SCAMP = EnemyProfile(
+    profile_id="nefarious_scamp",
+    display_name="Nefarious Scamp",
+    tier=EnemyTier.ELITE,
+    stats=EnemyStats(
+        max_health=150,
+        speed=80.0,
+        touch_damage=20,
+        coin_drop_value=20,
+        radius=24.0,
+    ),
+    abilities=(),
+    passive_influences=(NEFARIOUS_SCAMP_SPEED_AURA,),
+    hooks=(),
+    tags=("flying", "support", "elite"),
+    spawn_weight=0.02,
+    min_difficulty_factor=4.0,
+    sprite_asset_name="NefariousScamp.png",
+    sprite_pixel_scale=4,
     spawn_sfx_key=SFX_ENEMY_ELITE_SPAWN,
 )
 
@@ -160,6 +190,7 @@ ENEMY_PROFILES: dict[str, EnemyProfile] = {
     WARPED_SKULL.profile_id: WARPED_SKULL,
     CLAWED_ABOMINATION.profile_id: CLAWED_ABOMINATION,
     POINTED_DEMONSPAWN.profile_id: POINTED_DEMONSPAWN,
+    NEFARIOUS_SCAMP.profile_id: NEFARIOUS_SCAMP,
 }
 
 

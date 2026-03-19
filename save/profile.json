@@ -1,27 +1,27 @@
 {
   "profile": {
-    "last_run_coins": 304,
-    "last_run_enemies_killed": 179,
+    "last_run_coins": 3771,
+    "last_run_enemies_killed": 1921,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 304
+        "player-1": 3771
       },
       "enemies_killed_by_player": {
-        "player-1": 148
+        "player-1": 1701
       },
-      "enemies_killed_total": 179,
+      "enemies_killed_total": 1921,
       "players": [
         "player-1"
       ],
-      "simulation_time": 290.36666666673125,
-      "survival_time_seconds": 290.36666666673125,
-      "tick": 17422,
-      "total_run_coins": 304
+      "simulation_time": 1054.4666666660364,
+      "survival_time_seconds": 1054.4666666660364,
+      "tick": 63719,
+      "total_run_coins": 3771
     },
-    "last_run_survival_time_seconds": 290.36666666673125,
-    "lifetime_enemies_killed": 2852,
-    "lifetime_meta_earned": 2781,
-    "lifetime_runs_completed": 33,
+    "last_run_survival_time_seconds": 1054.4666666660364,
+    "lifetime_enemies_killed": 4773,
+    "lifetime_meta_earned": 6552,
+    "lifetime_runs_completed": 34,
     "logbook": {
       "encountered_blessing_ids": [
         "coin_vacuum",
@@ -33,16 +33,17 @@
         "clawed_abomination",
         "crimson_imp",
         "floating_eye",
+        "nefarious_scamp",
         "pointed_demonspawn",
         "warped_skull"
       ]
     },
-    "meta_currency": 525,
+    "meta_currency": 4296,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",
       "fullscreen": false,
-      "master_volume": 0,
+      "master_volume": 40,
       "mouse_sensitivity": 1.0,
       "music_volume": 25,
       "sfx_volume": 35

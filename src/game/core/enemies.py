@@ -87,6 +87,7 @@ class EnemyInfluenceDefinition:
     target_tiers: tuple[EnemyTier, ...] = ()
     required_tags: tuple[str, ...] = ()
     excluded_tags: tuple[str, ...] = ()
+    radius: float | None = None
     stat_modifier: EnemyStatModifier = field(default_factory=EnemyStatModifier)
     spawn_interval_multiplier: float = 1.0
     spawn_batch_bonus: int = 0
