@@ -15,6 +15,7 @@ class WorldSnapshot:
     blessings: list[dict[str, object]]
     active_blessings: list[dict[str, object]]
     vfx_events: list[dict[str, object]]
+    combat_feedback_events: list[dict[str, object]]
     score: dict[str, object]
     difficulty: dict[str, object]
 
@@ -32,6 +33,7 @@ class WorldSnapshot:
             "blessings": self.blessings,
             "active_blessings": self.active_blessings,
             "vfx_events": self.vfx_events,
+            "combat_feedback_events": self.combat_feedback_events,
             "score": self.score,
             "difficulty": self.difficulty,
         }
@@ -55,6 +57,7 @@ class WorldSnapshot:
             blessings=list(payload.get("blessings", [])),
             active_blessings=list(payload.get("active_blessings", [])),
             vfx_events=list(payload.get("vfx_events", [])),
+            combat_feedback_events=list(payload.get("combat_feedback_events", [])),
             score=score_payload if isinstance(score_payload, dict) else {},
             difficulty=difficulty_payload if isinstance(difficulty_payload, dict) else {},
         )

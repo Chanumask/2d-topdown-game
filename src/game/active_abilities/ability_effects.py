@@ -31,10 +31,8 @@ def apply_shockwave(world: World, player: Player, stats: dict[str, float]) -> Sh
         if not _enemy_in_cone(player, enemy, attack_direction, max_range, half_angle_cos):
             continue
 
-        enemy.take_damage(damage)
+        world.damage_enemy(enemy, damage, killer_player_id=player.player_id)
         result.enemies_hit += 1
-        if not enemy.alive:
-            world.resolve_enemy_damage_defeat(enemy, killer_player_id=player.player_id)
 
     return result
 

@@ -55,6 +55,23 @@ class TimedBlessingAnimationState:
     frame_progress_seconds: float = 0.0
 
 
+@dataclass(slots=True)
+class ScreenShakeState:
+    remaining_seconds: float = 0.0
+    duration_seconds: float = 0.0
+    amplitude: float = 0.0
+
+
+@dataclass(slots=True)
+class FloatingDamageNumber:
+    surface: pygame.Surface
+    world_x: float
+    world_y: float
+    velocity_y: float
+    remaining_seconds: float
+    total_seconds: float
+
+
 class Renderer:
     def __init__(
         self,
@@ -84,6 +101,14 @@ class Renderer:
         self._last_render_time_seconds: float | None = None
         self.rock_sprite_base = load_image(ROCK_SPRITE_PATH)
         self.coin_sprite_base = load_image(COIN_SPRITE_PATH)
+        self.damage_number_font = fonts.small
+        self.damage_number_surface_cache: dict[
+            tuple[str, tuple[int, int, int]], pygame.Surface
+        ] = {}
+        self.damage_aura_frame_cache: dict[tuple[int, int], pygame.Surface] = {}
+        self.floating_damage_numbers: list[FloatingDamageNumber] = []
+        self.enemy_hit_flash_timers: dict[int, float] = {}
+        self.screen_shake = ScreenShakeState()
         self.bottom_hud = BottomPlayerHUD(
             fonts=fonts,
             local_player_id=local_player_id,
@@ -91,11 +116,15 @@ class Renderer:
         )
         self.top_hud = TopRunStatsHUD(fonts=fonts)
         self._last_snapshot_tick = -1
+        self._last_combat_feedback_event_id_seen = 0
 
     def set_screen(self, screen: pygame.Surface) -> None:
         self.screen = screen
 
     def set_fonts(self, fonts: UIFonts) -> None:
+        self.damage_number_font = fonts.small
+        self.damage_number_surface_cache.clear()
+        self.damage_aura_frame_cache.clear()
         self.bottom_hud.set_fonts(fonts)
         self.top_hud.set_fonts(fonts)
 
@@ -106,6 +135,11 @@ class Renderer:
         self.enemy_effect_animation_states.clear()
         self.projectile_effect_animation_states.clear()
         self.guardian_spirit_animation_states.clear()
+        self.damage_aura_frame_cache.clear()
+        self.floating_damage_numbers.clear()
+        self.enemy_hit_flash_timers.clear()
+        self.screen_shake = ScreenShakeState()
+        self._last_combat_feedback_event_id_seen = 0
 
     def render(self, snapshot: WorldSnapshot) -> None:
         render_now_seconds = pygame.time.get_ticks() / 1000.0
@@ -119,8 +153,15 @@ class Renderer:
             self.enemy_effect_animation_states.clear()
             self.projectile_effect_animation_states.clear()
             self.guardian_spirit_animation_states.clear()
+            self.damage_aura_frame_cache.clear()
+            self.floating_damage_numbers.clear()
+            self.enemy_hit_flash_timers.clear()
+            self.screen_shake = ScreenShakeState()
+            self._last_combat_feedback_event_id_seen = 0
         self._last_snapshot_tick = snapshot.tick
         self.world_effect_player.consume_events(snapshot.vfx_events)
+        self._consume_combat_feedback_events(snapshot.combat_feedback_events)
+        self._update_feedback_state(render_dt)
         player_positions = self._snapshot_player_positions(snapshot)
 
         focus_player = next(
@@ -134,6 +175,11 @@ class Renderer:
         self.camera.update(
             self._read_position(focus_player) if isinstance(focus_player, dict) else None
         )
+        base_offset_x = self.camera.offset_x
+        base_offset_y = self.camera.offset_y
+        shake_x, shake_y = self._current_screen_shake_offset()
+        self.camera.offset_x = base_offset_x - shake_x
+        self.camera.offset_y = base_offset_y - shake_y
 
         # TODO: Add resolution-aware world scaling during the planned camera/map rendering rework.
         self.screen.fill(self.settings.background_color)
@@ -147,6 +193,9 @@ class Renderer:
         self._draw_players(snapshot, render_dt)
         self._draw_guardian_spirit_effects(snapshot, render_dt)
         self._draw_world_effects(render_dt, player_positions)
+        self._draw_damage_numbers()
+        self.camera.offset_x = base_offset_x
+        self.camera.offset_y = base_offset_y
         self.top_hud.render(self.screen, snapshot)
         self.bottom_hud.render(self.screen, snapshot)
 
@@ -356,6 +405,7 @@ class Renderer:
             state = self.enemy_animation_states.setdefault(enemy_id, EnemyAnimationState())
             self._advance_animation(state, clip, ANIM_IDLE, render_dt)
             current_frame = clip.frames[state.frame_index]
+            current_frame = self._apply_enemy_hit_flash(enemy_id, current_frame)
             sprite_rect = current_frame.get_rect(center=center)
             self.screen.blit(current_frame, sprite_rect)
 
@@ -561,6 +611,8 @@ class Renderer:
             )
 
             frame = aura_clip.frames[state.frame_index]
+            aura_radius = float(blessing.get("radius", self.settings.damage_aura_radius))
+            frame = self._scaled_damage_aura_frame(frame, aura_radius)
             frame_rect = frame.get_rect(center=self.camera.world_to_screen(position))
             self.screen.blit(frame, frame_rect)
 
@@ -628,6 +680,164 @@ class Renderer:
             for player_id, state in self.guardian_spirit_animation_states.items()
             if player_id in active_player_ids
         }
+
+    def _consume_combat_feedback_events(self, events: list[dict[str, object]]) -> None:
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_id = int(event.get("event_id", 0))
+            if event_id <= self._last_combat_feedback_event_id_seen:
+                continue
+            self._last_combat_feedback_event_id_seen = event_id
+            event_type = str(event.get("type", ""))
+            if event_type == "enemy_hit":
+                enemy_id = int(event.get("enemy_id", -1))
+                if enemy_id >= 0:
+                    self.enemy_hit_flash_timers[enemy_id] = max(
+                        self.enemy_hit_flash_timers.get(enemy_id, 0.0),
+                        0.08,
+                    )
+                position = self._read_position_dict(event.get("position"))
+                damage = max(0, int(event.get("damage", 0)))
+                if damage > 0:
+                    self._spawn_damage_number(position, damage)
+            elif event_type == "player_hit":
+                damage = max(0.0, float(event.get("damage", 0.0)))
+                max_health = max(1.0, float(event.get("max_health", 1.0)))
+                damage_fraction = max(0.0, min(1.0, damage / max_health))
+                amplitude = 4.0 + (damage_fraction * 16.0)
+                duration_seconds = 0.10 + (damage_fraction * 0.14)
+                self._trigger_screen_shake(
+                    duration_seconds=duration_seconds,
+                    amplitude=amplitude,
+                )
+
+    def _update_feedback_state(self, render_dt: float) -> None:
+        self.enemy_hit_flash_timers = {
+            enemy_id: max(0.0, timer - render_dt)
+            for enemy_id, timer in self.enemy_hit_flash_timers.items()
+            if timer - render_dt > 0.0
+        }
+        if self.screen_shake.remaining_seconds > 0.0:
+            self.screen_shake.remaining_seconds = max(
+                0.0,
+                self.screen_shake.remaining_seconds - render_dt,
+            )
+
+        kept_numbers: list[FloatingDamageNumber] = []
+        for number in self.floating_damage_numbers:
+            number.remaining_seconds = max(0.0, number.remaining_seconds - render_dt)
+            if number.remaining_seconds <= 0.0:
+                continue
+            number.world_y += number.velocity_y * render_dt
+            kept_numbers.append(number)
+        self.floating_damage_numbers = kept_numbers
+
+    def _trigger_screen_shake(self, *, duration_seconds: float, amplitude: float) -> None:
+        if self.screen_shake.remaining_seconds > 0.0:
+            self.screen_shake.remaining_seconds = max(
+                self.screen_shake.remaining_seconds,
+                float(duration_seconds),
+            )
+            self.screen_shake.duration_seconds = max(
+                self.screen_shake.duration_seconds,
+                float(duration_seconds),
+            )
+            self.screen_shake.amplitude = max(self.screen_shake.amplitude, float(amplitude))
+            return
+
+        self.screen_shake = ScreenShakeState(
+            remaining_seconds=float(duration_seconds),
+            duration_seconds=float(duration_seconds),
+            amplitude=float(amplitude),
+        )
+
+    def _current_screen_shake_offset(self) -> tuple[float, float]:
+        if self.screen_shake.remaining_seconds <= 0.0 or self.screen_shake.duration_seconds <= 0.0:
+            return (0.0, 0.0)
+
+        progress = self.screen_shake.remaining_seconds / self.screen_shake.duration_seconds
+        amplitude = self.screen_shake.amplitude * max(0.0, min(1.0, progress))
+        phase = pygame.time.get_ticks() / 1000.0
+        shake_x = math.sin(phase * 92.0) * amplitude
+        shake_y = math.cos(phase * 71.0) * amplitude * 0.7
+        return (shake_x, shake_y)
+
+    def _spawn_damage_number(self, position: tuple[float, float], damage: int) -> None:
+        if len(self.floating_damage_numbers) >= 48:
+            self.floating_damage_numbers.pop(0)
+
+        surface = self._damage_number_surface(str(damage), (245, 245, 245)).copy()
+        self.floating_damage_numbers.append(
+            FloatingDamageNumber(
+                surface=surface,
+                world_x=float(position[0]),
+                world_y=float(position[1]) - 18.0,
+                velocity_y=-28.0,
+                remaining_seconds=0.7,
+                total_seconds=0.7,
+            )
+        )
+
+    def _draw_damage_numbers(self) -> None:
+        for number in self.floating_damage_numbers:
+            alpha = int(
+                round(
+                    255.0
+                    * max(0.0, min(1.0, number.remaining_seconds / max(0.01, number.total_seconds)))
+                )
+            )
+            number.surface.set_alpha(alpha)
+            center = self.camera.world_to_screen((number.world_x, number.world_y))
+            rect = number.surface.get_rect(center=center)
+            self.screen.blit(number.surface, rect)
+
+    def _scaled_damage_aura_frame(
+        self,
+        frame: pygame.Surface,
+        aura_radius: float,
+    ) -> pygame.Surface:
+        target_diameter = max(24, int(round(max(1.0, aura_radius) * 2.4)))
+        cache_key = (id(frame), target_diameter)
+        cached = self.damage_aura_frame_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if frame.get_width() == target_diameter and frame.get_height() == target_diameter:
+            self.damage_aura_frame_cache[cache_key] = frame
+            return frame
+
+        scaled = pygame.transform.scale(frame, (target_diameter, target_diameter))
+        self.damage_aura_frame_cache[cache_key] = scaled
+        return scaled
+
+    def _damage_number_surface(
+        self,
+        text: str,
+        color: tuple[int, int, int],
+    ) -> pygame.Surface:
+        cache_key = (text, color)
+        cached = self.damage_number_surface_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        rendered = self.damage_number_font.render(text, True, color)
+        self.damage_number_surface_cache[cache_key] = rendered
+        return rendered
+
+    def _apply_enemy_hit_flash(
+        self,
+        enemy_id: int,
+        frame: pygame.Surface,
+    ) -> pygame.Surface:
+        remaining = self.enemy_hit_flash_timers.get(enemy_id, 0.0)
+        if remaining <= 0.0:
+            return frame
+
+        flashed = frame.copy()
+        intensity = max(90, min(180, int(round((remaining / 0.08) * 180.0))))
+        flashed.fill((intensity, intensity, intensity), special_flags=pygame.BLEND_RGB_ADD)
+        return flashed
 
     def _draw_blessing_fallback(self, center: tuple[int, int], radius: int) -> None:
         pygame.draw.circle(self.screen, (136, 214, 255), center, radius)

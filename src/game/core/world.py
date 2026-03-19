@@ -71,21 +71,25 @@ class World:
     _rng: random.Random = field(init=False, repr=False)
     _next_entity_id: int = field(init=False, repr=False)
     _next_vfx_event_id: int = field(init=False, repr=False)
+    _next_combat_feedback_event_id: int = field(init=False, repr=False)
     _pending_actions: dict[str, PlayerActions] = field(init=False, repr=False)
     _pending_session_actions: dict[str, SessionActions] = field(init=False, repr=False)
     _pending_vfx_events: list[dict[str, object]] = field(init=False, repr=False)
     _pending_profile_progress_events: list[dict[str, str]] = field(init=False, repr=False)
     _pending_audio_events: list[dict[str, str]] = field(init=False, repr=False)
+    _pending_combat_feedback_events: list[dict[str, object]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._rng = random.Random()
         self._next_entity_id = 1
         self._next_vfx_event_id = 1
+        self._next_combat_feedback_event_id = 1
         self._pending_actions = {}
         self._pending_session_actions = {}
         self._pending_vfx_events = []
         self._pending_profile_progress_events = []
         self._pending_audio_events = []
+        self._pending_combat_feedback_events = []
 
         self.spawner = EnemySpawner(
             rng=self._rng,
@@ -183,6 +187,7 @@ class World:
     def update(self, dt: float) -> None:
         self.tick += 1
         self._pending_vfx_events.clear()
+        self._pending_combat_feedback_events.clear()
         self._apply_session_actions()
 
         if self.session.phase is MatchPhase.GAME_OVER:
@@ -270,6 +275,7 @@ class World:
             if aura.remaining_seconds > 0.0
         ]
         vfx_events = list(self._pending_vfx_events)
+        combat_feedback_events = list(self._pending_combat_feedback_events)
 
         score = {
             "total_run_coins": self.total_coins_collected,
@@ -303,6 +309,7 @@ class World:
             blessings=blessings,
             active_blessings=active_blessings,
             vfx_events=vfx_events,
+            combat_feedback_events=combat_feedback_events,
             score=score,
             difficulty=difficulty,
         )
@@ -450,6 +457,9 @@ class World:
         self._pending_audio_events.clear()
         return events
 
+    def peek_combat_feedback_events(self) -> list[dict[str, object]]:
+        return list(self._pending_combat_feedback_events)
+
     def activate_coin_vacuum(self, collector_player_id: str) -> None:
         collector = self.players.get(collector_player_id)
         if collector is None or not collector.alive:
@@ -470,6 +480,14 @@ class World:
 
     def defeat_enemy(self, enemy: Enemy, killer_player_id: str | None) -> None:
         self.register_enemy_kill(killer_player_id)
+        if enemy.tier == EnemyTier.ELITE.value:
+            self._queue_combat_feedback_event(
+                {
+                    "type": "elite_killed",
+                    "enemy_id": int(enemy.entity_id),
+                    "position": enemy.position.to_dict(),
+                }
+            )
         self._drop_enemy_reward(position=enemy.position.copy(), coin_value=enemy.coin_drop_value)
         self.enemy_director.on_enemy_death(self, enemy)
         enemy.clear_ability_state()
@@ -533,7 +551,47 @@ class World:
 
         health_before = int(player.health)
         player.take_damage(final_damage)
-        return max(0, health_before - int(player.health))
+        damage_dealt = max(0, health_before - int(player.health))
+        if damage_dealt > 0:
+            self._queue_combat_feedback_event(
+                {
+                    "type": "player_hit",
+                    "player_id": player.player_id,
+                    "position": player.position.to_dict(),
+                    "damage": int(damage_dealt),
+                    "max_health": int(max(1, player.max_health)),
+                }
+            )
+        return damage_dealt
+
+    def damage_enemy(
+        self,
+        enemy: Enemy,
+        amount: int,
+        *,
+        killer_player_id: str | None,
+    ) -> int:
+        if amount <= 0 or not enemy.alive:
+            return 0
+
+        health_before = int(enemy.health)
+        enemy.take_damage(amount)
+        damage_dealt = max(0, health_before - int(enemy.health))
+        if damage_dealt <= 0:
+            return 0
+
+        self._queue_combat_feedback_event(
+            {
+                "type": "enemy_hit",
+                "enemy_id": int(enemy.entity_id),
+                "position": enemy.position.to_dict(),
+                "damage": int(damage_dealt),
+                "tier": str(enemy.tier),
+            }
+        )
+        if not enemy.alive:
+            self.resolve_enemy_damage_defeat(enemy, killer_player_id=killer_player_id)
+        return damage_dealt
 
     def _apply_session_actions(self) -> None:
         for player_id, session_actions in self._pending_session_actions.items():
@@ -753,10 +811,7 @@ class World:
             if not circles_overlap(player.position, aura_radius, enemy.position, enemy.radius):
                 continue
 
-            enemy.take_damage(damage)
-            if enemy.alive:
-                continue
-            self.resolve_enemy_damage_defeat(enemy, killer_player_id=player_id)
+            self.damage_enemy(enemy, damage, killer_player_id=player_id)
 
     def _update_enemy_abilities(self, dt: float) -> None:
         active_enemy_ids = [
@@ -806,10 +861,7 @@ class World:
                 enemy.radius,
             ):
                 continue
-            enemy.take_damage(explosion_damage)
-            if enemy.alive:
-                continue
-            self.resolve_enemy_damage_defeat(enemy, killer_player_id=None)
+            self.damage_enemy(enemy, explosion_damage, killer_player_id=None)
 
         self.defeat_enemy(source_enemy, killer_player_id=None)
 
@@ -1005,6 +1057,14 @@ class World:
         if not normalized_key:
             return
         self._pending_audio_events.append({"sfx_key": normalized_key})
+
+    def _queue_combat_feedback_event(self, payload: dict[str, object]) -> None:
+        if not payload:
+            return
+        event_payload = dict(payload)
+        event_payload["event_id"] = self._next_combat_feedback_event_id
+        self._next_combat_feedback_event_id += 1
+        self._pending_combat_feedback_events.append(event_payload)
 
     def _emit_elite_spawn_indicators(self, spawn_position: Vec2) -> None:
         indicator_distance = 56.0

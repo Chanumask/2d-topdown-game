@@ -30,9 +30,9 @@ class GameSettings:
     blessing_radius: float = 9.0
     blessing_drop_rate: float = 0.02
     damage_aura_duration_seconds: float = 20.0
-    damage_aura_radius: float = 72.0
+    damage_aura_radius: float = 96.0
     damage_aura_tick_interval_seconds: float = 0.5
-    damage_aura_damage_per_tick: int = 10
+    damage_aura_damage_per_tick: int = 20
 
     spawn_base_interval_seconds: float = 2
     spawn_min_interval_seconds: float = 0.45

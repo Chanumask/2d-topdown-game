@@ -72,14 +72,12 @@ class CombatSystem:
                 ):
                     continue
 
-                enemy.take_damage(projectile.damage)
+                world.damage_enemy(
+                    enemy,
+                    projectile.damage,
+                    killer_player_id=projectile.owner_player_id or None,
+                )
                 projectile.alive = False
-
-                if not enemy.alive:
-                    world.resolve_enemy_damage_defeat(
-                        enemy,
-                        killer_player_id=projectile.owner_player_id or None,
-                    )
                 break
 
     def _projectile_hits_player(self, world: World) -> None:
