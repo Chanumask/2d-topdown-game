@@ -10,6 +10,9 @@ class Projectile(Entity):
     projectile_effect_id: str | None = None
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     damage: int = 15
+    damage_fraction_of_target_max_health: float = 0.0
+    on_hit_move_speed_multiplier: float = 1.0
+    on_hit_slow_duration_seconds: float = 0.0
     ttl_seconds: float = 1.3
 
     def update(self, dt: float) -> None:
@@ -28,6 +31,11 @@ class Projectile(Entity):
                 "projectile_effect_id": self.projectile_effect_id,
                 "velocity": self.velocity.to_dict(),
                 "damage": self.damage,
+                "damage_fraction_of_target_max_health": float(
+                    self.damage_fraction_of_target_max_health
+                ),
+                "on_hit_move_speed_multiplier": float(self.on_hit_move_speed_multiplier),
+                "on_hit_slow_duration_seconds": float(self.on_hit_slow_duration_seconds),
                 "ttl_seconds": float(self.ttl_seconds),
             }
         )
@@ -49,5 +57,10 @@ class Projectile(Entity):
             ),
             velocity=vec2_from_payload(payload, "velocity"),
             damage=int(payload.get("damage", 15)),
+            damage_fraction_of_target_max_health=float(
+                payload.get("damage_fraction_of_target_max_health", 0.0)
+            ),
+            on_hit_move_speed_multiplier=float(payload.get("on_hit_move_speed_multiplier", 1.0)),
+            on_hit_slow_duration_seconds=float(payload.get("on_hit_slow_duration_seconds", 0.0)),
             ttl_seconds=float(payload.get("ttl_seconds", 1.3)),
         )

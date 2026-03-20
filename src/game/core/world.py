@@ -15,21 +15,35 @@ from game.core.blessings import (
     FURY_STACKS_DURATION_SECONDS,
     GOLDEN_MOMENTUM_DURATION_SECONDS,
     IMPACT_PULSE_DAMAGE_MULTIPLIER,
+    BlessingCategory,
     chain_spark_proc_chance,
     fury_throw_cooldown_multiplier,
     golden_momentum_speed_multiplier,
     impact_pulse_radius,
+    list_blessings,
+    player_can_receive_blessing,
     random_blessing_id,
 )
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
+    ENEMY_VFX_BOSS_SPAWN_DIRECTION,
     ENEMY_VFX_ELITE_SPAWN_DIRECTION,
     EnemyAbilityDefinition,
     EnemySpawnRequest,
     EnemyTier,
 )
 from game.core.enemy_catalog import get_enemy_profile
+from game.core.enhancements import (
+    EnhancementDefinition,
+    EnhancementOffer,
+    EnhancementRuntime,
+    core_attack_cooldown_multiplier,
+    damage_reduction_multiplier,
+    move_speed_multiplier,
+    projectile_speed_multiplier,
+    stone_damage_multiplier,
+)
 from game.core.run_result import RunResult
 from game.core.session_state import MatchPhase, SessionState
 from game.core.snapshot import WorldSnapshot
@@ -78,6 +92,7 @@ class World:
     enemies_killed_by_player: dict[str, int] = field(default_factory=dict)
     final_run_result: RunResult | None = None
     spawned_boss_profile_ids: set[str] = field(default_factory=set)
+    enhancement_runtime: EnhancementRuntime = field(default_factory=EnhancementRuntime)
     session: SessionState = field(default_factory=SessionState)
     spawner: EnemySpawner = field(init=False)
     combat: CombatSystem = field(init=False)
@@ -164,10 +179,12 @@ class World:
             character_id=resolved_character_id,
             position=spawn,
             radius=self.settings.player_radius,
+            base_max_health=base_health,
             base_speed=base_speed,
             speed=base_speed,
             max_health=base_health,
             health=base_health,
+            base_coin_pickup_radius=pickup_radius,
             coin_pickup_radius=pickup_radius,
             aim_position=spawn.copy(),
             base_throw_cooldown_seconds=throw_cooldown,
@@ -175,6 +192,7 @@ class World:
             damage_iframe_seconds=self.settings.player_touch_iframe_seconds,
         )
         self.enemies_killed_by_player.setdefault(player_id, 0)
+        self.enhancement_runtime.ensure_player(player_id)
         self.active_ability_runtime.equip_player(
             player_id,
             active_ability_id,
@@ -251,6 +269,7 @@ class World:
         self._collect_blessings()
         self._cleanup_dead_entities()
         self._update_game_over_state()
+        self._maybe_trigger_enhancement_offer()
 
         if self.session.phase is MatchPhase.PAUSE_COUNTDOWN:
             self.session.countdown_remaining = max(0.0, self.session.countdown_remaining - dt)
@@ -363,6 +382,8 @@ class World:
             self,
             profile_id=profile_id,
         )
+        if spawn_request.tier is EnemyTier.BOSS:
+            position = Vec2(self.world_width * 0.5, self.world_height * 0.5)
         spawn_position = self._nearest_walkable_position(position, spawn_request.stats.radius)
         enemy = Enemy(
             entity_id=self._allocate_entity_id(),
@@ -388,9 +409,16 @@ class World:
         if profile is not None and profile.spawn_sfx_key:
             self._queue_audio_event(profile.spawn_sfx_key)
         if spawn_request.tier is EnemyTier.ELITE:
-            self._emit_elite_spawn_indicators(spawn_position)
+            self._emit_spawn_direction_indicators(
+                spawn_position,
+                effect_id=ENEMY_VFX_ELITE_SPAWN_DIRECTION,
+            )
         elif spawn_request.tier is EnemyTier.BOSS:
             self.spawned_boss_profile_ids.add(spawn_request.profile_id)
+            self._emit_spawn_direction_indicators(
+                spawn_position,
+                effect_id=ENEMY_VFX_BOSS_SPAWN_DIRECTION,
+            )
         self.enemy_director.on_enemy_spawn(self, enemy)
 
     def spawn_projectile(
@@ -403,6 +431,9 @@ class World:
         owner_player_id: str = "",
         source_faction: str = "player",
         projectile_effect_id: str | None = None,
+        damage_fraction_of_target_max_health: float = 0.0,
+        on_hit_move_speed_multiplier: float = 1.0,
+        on_hit_slow_duration_seconds: float = 0.0,
     ) -> None:
         projectile = Projectile(
             entity_id=self._allocate_entity_id(),
@@ -413,6 +444,9 @@ class World:
             projectile_effect_id=projectile_effect_id,
             velocity=velocity,
             damage=damage,
+            damage_fraction_of_target_max_health=damage_fraction_of_target_max_health,
+            on_hit_move_speed_multiplier=on_hit_move_speed_multiplier,
+            on_hit_slow_duration_seconds=on_hit_slow_duration_seconds,
             ttl_seconds=ttl_seconds,
         )
         self.projectiles[projectile.entity_id] = projectile
@@ -538,12 +572,23 @@ class World:
         if self._rng.random() >= drop_rate:
             return False
 
-        blessing_id = random_blessing_id(self._rng)
+        blessing_id = random_blessing_id(self._rng, self._available_blessing_drop_ids())
         if blessing_id is None:
             return False
 
         self.spawn_blessing(position=position, blessing_id=blessing_id)
         return True
+
+    def _available_blessing_drop_ids(self) -> list[str]:
+        available_blessing_ids: list[str] = []
+        for definition in list_blessings():
+            if definition.category is BlessingCategory.RUN_BOON and not any(
+                player_can_receive_blessing(player, definition.blessing_id)
+                for player in self.players.values()
+            ):
+                continue
+            available_blessing_ids.append(definition.blessing_id)
+        return available_blessing_ids
 
     def _apply_player_actions(self) -> None:
         for player_id, player in self.players.items():
@@ -571,6 +616,14 @@ class World:
             self,
             player.player_id,
             amount,
+        )
+        final_damage = int(
+            round(
+                float(final_damage)
+                * damage_reduction_multiplier(
+                    self.enhancement_runtime.modifier_for_player(player.player_id)
+                )
+            )
         )
         if final_damage <= 0:
             return 0
@@ -703,18 +756,27 @@ class World:
             return True
 
         projectile_speed = max(1.0, float(ability.projectile_speed))
-        projectile_damage = max(1, int(ability.projectile_damage))
+        projectile_damage = max(0, int(ability.projectile_damage))
+        projectile_damage_fraction = max(
+            0.0,
+            float(ability.projectile_damage_fraction_of_max_health),
+        )
         projectile_ttl = max(0.05, float(ability.projectile_ttl_seconds))
         projectile_radius = max(1.0, float(ability.projectile_radius))
+        projectile_slow_multiplier = max(0.0, float(ability.projectile_slow_multiplier))
+        projectile_slow_duration = max(0.0, float(ability.projectile_slow_duration_seconds))
         burst_angles = tuple(float(angle) for angle in ability.projectile_burst_angles_degrees)
         if burst_angles:
             self._spawn_enemy_projectile_burst(
                 enemy,
                 projectile_speed=projectile_speed,
                 projectile_damage=projectile_damage,
+                projectile_damage_fraction_of_max_health=projectile_damage_fraction,
                 projectile_ttl=projectile_ttl,
                 projectile_radius=projectile_radius,
                 projectile_effect_id=ability.projectile_effect_id,
+                projectile_slow_multiplier=projectile_slow_multiplier,
+                projectile_slow_duration_seconds=projectile_slow_duration,
                 burst_angles_degrees=burst_angles,
             )
         else:
@@ -727,6 +789,9 @@ class World:
                 radius=projectile_radius,
                 source_faction="enemy",
                 projectile_effect_id=ability.projectile_effect_id,
+                damage_fraction_of_target_max_health=projectile_damage_fraction,
+                on_hit_move_speed_multiplier=projectile_slow_multiplier,
+                on_hit_slow_duration_seconds=projectile_slow_duration,
             )
         enemy.attack_cooldown_seconds = max(0.05, float(ability.attack_interval_seconds))
         return True
@@ -748,8 +813,51 @@ class World:
 
     def has_alive_boss(self) -> bool:
         return any(
-            enemy.alive and enemy.tier == EnemyTier.BOSS.value
-            for enemy in self.enemies.values()
+            enemy.alive and enemy.tier == EnemyTier.BOSS.value for enemy in self.enemies.values()
+        )
+
+    def pending_enhancement_offer(self, player_id: str) -> EnhancementOffer | None:
+        return self.enhancement_runtime.pending_offer_for_player(player_id)
+
+    def has_pending_enhancement_offer(self, player_id: str) -> bool:
+        return self.enhancement_runtime.has_pending_offer(player_id)
+
+    def apply_enhancement_choice(
+        self,
+        player_id: str,
+        option_index: int,
+    ) -> EnhancementDefinition | None:
+        definition = self.enhancement_runtime.apply_choice_index(player_id, option_index)
+        if definition is None:
+            return None
+        self._refresh_player_runtime_stats()
+        return definition
+
+    def player_projectile_speed(self, player_id: str) -> float:
+        modifier = self.enhancement_runtime.modifier_for_player(player_id)
+        return float(self.combat.projectile_speed) * projectile_speed_multiplier(modifier)
+
+    def player_projectile_damage(self, player_id: str) -> int:
+        modifier = self.enhancement_runtime.modifier_for_player(player_id)
+        scaled_damage = float(self.combat.projectile_damage) * stone_damage_multiplier(modifier)
+        return max(1, int(round(scaled_damage)))
+
+    def apply_player_move_speed_multiplier(
+        self,
+        player: Player,
+        *,
+        multiplier: float,
+        duration_seconds: float,
+    ) -> None:
+        if duration_seconds <= 0.0:
+            return
+        player.move_speed_multiplier_override = min(
+            float(player.move_speed_multiplier_override),
+            max(0.0, float(multiplier)),
+        )
+        player.move_speed_multiplier_override_remaining_seconds = max(
+            float(player.move_speed_multiplier_override_remaining_seconds),
+            float(duration_seconds),
         )
 
     def is_enemy_targetable_for_player_attacks(self, enemy: Enemy) -> bool:
@@ -867,24 +975,45 @@ class World:
 
     def _refresh_player_runtime_stats(self) -> None:
         for player in self.players.values():
+            modifier = self.enhancement_runtime.modifier_for_player(player.player_id)
+            target_max_health = max(1, int(player.base_max_health + modifier.max_health_bonus))
+            if target_max_health != player.max_health:
+                health_delta = target_max_health - int(player.max_health)
+                player.max_health = target_max_health
+                player.health = max(0, min(player.max_health, int(player.health) + health_delta))
+
+            player.coin_pickup_radius = max(
+                player.radius,
+                float(player.base_coin_pickup_radius) + float(modifier.pickup_radius_bonus),
+            )
+
             speed_multiplier = 1.0
-            if (
-                player.golden_momentum_stacks > 0
-                and player.golden_momentum_remaining_seconds > 0.0
-            ):
-                speed_multiplier *= golden_momentum_speed_multiplier(
-                    player.golden_momentum_stacks
-                )
+            speed_multiplier *= move_speed_multiplier(modifier)
+            if player.golden_momentum_stacks > 0 and player.golden_momentum_remaining_seconds > 0.0:
+                speed_multiplier *= golden_momentum_speed_multiplier(player.golden_momentum_stacks)
+            if player.move_speed_multiplier_override_remaining_seconds > 0.0:
+                speed_multiplier *= max(0.0, float(player.move_speed_multiplier_override))
             player.speed = float(player.base_speed) * speed_multiplier
 
             cooldown_multiplier = 1.0
+            cooldown_multiplier *= core_attack_cooldown_multiplier(modifier)
             if player.fury_stacks > 0 and player.fury_remaining_seconds > 0.0:
                 cooldown_multiplier = fury_throw_cooldown_multiplier(player.fury_stacks)
+                cooldown_multiplier *= core_attack_cooldown_multiplier(modifier)
             effective_cooldown = max(
                 0.05,
                 float(player.base_throw_cooldown_seconds) * cooldown_multiplier,
             )
             self._set_player_throw_cooldown(player, effective_cooldown)
+
+    def _maybe_trigger_enhancement_offer(self) -> None:
+        if self.session.phase is not MatchPhase.RUNNING:
+            return
+        self.enhancement_runtime.update_trigger(
+            difficulty_factor=self.difficulty_factor,
+            player_ids=sorted(self.players),
+            rng=self._rng,
+        )
 
     @staticmethod
     def _set_player_throw_cooldown(player: Player, effective_cooldown: float) -> None:
@@ -1082,9 +1211,12 @@ class World:
         *,
         projectile_speed: float,
         projectile_damage: int,
+        projectile_damage_fraction_of_max_health: float,
         projectile_ttl: float,
         projectile_radius: float,
         projectile_effect_id: str | None,
+        projectile_slow_multiplier: float,
+        projectile_slow_duration_seconds: float,
         burst_angles_degrees: tuple[float, ...],
     ) -> None:
         for angle_degrees in burst_angles_degrees:
@@ -1099,6 +1231,9 @@ class World:
                 radius=projectile_radius,
                 source_faction="enemy",
                 projectile_effect_id=projectile_effect_id,
+                damage_fraction_of_target_max_health=projectile_damage_fraction_of_max_health,
+                on_hit_move_speed_multiplier=projectile_slow_multiplier,
+                on_hit_slow_duration_seconds=projectile_slow_duration_seconds,
             )
 
     def _arm_enemy_delayed_explosion(
@@ -1259,7 +1394,12 @@ class World:
         self._next_combat_feedback_event_id += 1
         self._pending_combat_feedback_events.append(event_payload)
 
-    def _emit_elite_spawn_indicators(self, spawn_position: Vec2) -> None:
+    def _emit_spawn_direction_indicators(
+        self,
+        spawn_position: Vec2,
+        *,
+        effect_id: str,
+    ) -> None:
         indicator_distance = 56.0
         for player_id, player in self.players.items():
             if not player.alive:
@@ -1273,7 +1413,7 @@ class World:
 
             snapped_angle_degrees = round(target_angle_degrees / 45.0) * 45.0
             self.emit_world_vfx(
-                ENEMY_VFX_ELITE_SPAWN_DIRECTION,
+                effect_id,
                 player.position.copy(),
                 angle_degrees=snapped_angle_degrees - 90.0,
                 anchor_player_id=player_id,

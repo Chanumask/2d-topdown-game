@@ -57,7 +57,7 @@ def try_fire_frenzy_projectile(
         1,
         int(
             round(
-                float(world.combat.projectile_damage)
+                float(world.player_projectile_damage(player.player_id))
                 * max(0.05, float(stats.get("projectile_damage_multiplier", 1.0)))
             )
         ),
@@ -65,7 +65,7 @@ def try_fire_frenzy_projectile(
 
     world.spawn_projectile(
         position=player.position.copy(),
-        velocity=direction.normalized() * float(world.combat.projectile_speed),
+        velocity=direction.normalized() * float(world.player_projectile_speed(player.player_id)),
         owner_player_id=player.player_id,
         damage=projectile_damage,
         ttl_seconds=float(world.combat.projectile_ttl_seconds),

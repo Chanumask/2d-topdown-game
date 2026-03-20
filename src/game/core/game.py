@@ -29,6 +29,7 @@ from game.render.fonts import UIFonts, load_ui_fonts, scale_ui_fonts
 from game.render.renderer import Renderer
 from game.settings import SETTINGS
 from game.ui import (
+    EnhancementChoiceScreen,
     GameOverScreen,
     LobbyScreen,
     LogbookScreen,
@@ -86,6 +87,7 @@ class GameApp:
         self.shop_menu = ShopScreen()
         self.settings_menu = SettingsScreen()
         self.pause_menu = PauseMenuScreen()
+        self.enhancement_menu = EnhancementChoiceScreen()
         self.game_over_menu = GameOverScreen()
         self.character_options: list[CharacterOption] = list_character_options()
         self.map_options: list[MapOption] = list_map_options()
@@ -294,9 +296,38 @@ class GameApp:
 
         if self.app_state.current_screen in (
             AppScreen.IN_RUN,
+            AppScreen.ENHANCEMENT_CHOICE,
             AppScreen.PAUSE_COUNTDOWN,
             AppScreen.RESUME_COUNTDOWN,
         ):
+            if self.app_state.current_screen is AppScreen.ENHANCEMENT_CHOICE:
+                menu_actions = self.menu_input.collect(events)
+                if menu_actions.quit_requested:
+                    self._save_profile()
+                    self.app_state.running = False
+                    return
+
+                offer = self.world.pending_enhancement_offer(self.local_player_id)
+                if offer is None:
+                    self._sync_run_screen_from_session()
+                    return
+
+                previous_index = self.enhancement_menu.selected_index
+                selected_index = self.enhancement_menu.handle_input(
+                    menu_actions,
+                    self.screen,
+                    offer,
+                )
+                self._play_menu_audio_feedback(
+                    previous_index=previous_index,
+                    current_index=self.enhancement_menu.selected_index,
+                    selected_or_clicked=menu_actions.select or menu_actions.mouse_left_click,
+                )
+                if selected_index is not None:
+                    self.world.apply_enhancement_choice(self.local_player_id, selected_index)
+                self._sync_run_screen_from_session()
+                return
+
             gameplay_input = self.game_input.collect(events)
             if gameplay_input.quit_requested:
                 self._save_profile()
@@ -488,6 +519,26 @@ class GameApp:
                 (225, 225, 225),
             )
 
+        elif self.app_state.current_screen is AppScreen.ENHANCEMENT_CHOICE:
+            self._draw_overlay_alpha(170)
+            if self.world is not None:
+                offer = self.world.pending_enhancement_offer(self.local_player_id)
+                if offer is not None:
+                    active_ability = self.world.active_ability_runtime.by_player_id.get(
+                        self.local_player_id
+                    )
+                    active_ability_id = (
+                        active_ability.ability_id
+                        if active_ability is not None
+                        else self.app_state.selected_ability_id
+                    )
+                    self.enhancement_menu.render(
+                        self.screen,
+                        self.ui_fonts,
+                        offer,
+                        active_ability_id=active_ability_id,
+                    )
+
         elif self.app_state.current_screen is AppScreen.GAME_OVER:
             self._draw_overlay_alpha(170)
             self.game_over_menu.render(
@@ -586,6 +637,11 @@ class GameApp:
             return
 
         phase = self.world.session.phase
+        if phase is not MatchPhase.GAME_OVER and self.world.has_pending_enhancement_offer(
+            self.local_player_id
+        ):
+            self.app_state.current_screen = AppScreen.ENHANCEMENT_CHOICE
+            return
         mapped = AppScreen.IN_RUN
         if phase is MatchPhase.PAUSE_COUNTDOWN:
             mapped = AppScreen.PAUSE_COUNTDOWN

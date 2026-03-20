@@ -17,6 +17,10 @@ from game.active_abilities.ability_effects import (
     resolve_attack_direction,
     try_fire_frenzy_projectile,
 )
+from game.core.enhancements import (
+    ability_cooldown_multiplier,
+    apply_ability_enhancement_modifiers,
+)
 
 if TYPE_CHECKING:
     from game.core.world import World
@@ -67,7 +71,7 @@ class ActiveAbilityRuntime:
             return False
 
         ability, variant = resolve_ability_selection(state.ability_id, state.variant_id)
-        stats = build_scaled_stats(ability, variant)
+        stats = self._effective_stats(world, player_id, ability, variant)
 
         activated = False
         if ability.ability_id == ABILITY_GUARDIAN_SPIRIT:
@@ -104,7 +108,12 @@ class ActiveAbilityRuntime:
         if not activated:
             return False
 
-        state.cooldown_total_seconds = cooldown_seconds(ability, variant)
+        state.cooldown_total_seconds = self._effective_cooldown_seconds(
+            world,
+            player_id,
+            ability,
+            variant,
+        )
         state.cooldown_remaining_seconds = state.cooldown_total_seconds
         if ability.activation_vfx_effect_id and ability.ability_id != ABILITY_SHOCKWAVE:
             world.emit_world_vfx(ability.activation_vfx_effect_id, player.position.copy())
@@ -125,7 +134,17 @@ class ActiveAbilityRuntime:
                 continue
 
             ability, variant = resolve_ability_selection(state.ability_id, state.variant_id)
-            stats = build_scaled_stats(ability, variant)
+            state.cooldown_total_seconds = self._effective_cooldown_seconds(
+                world,
+                player_id,
+                ability,
+                variant,
+            )
+            state.cooldown_remaining_seconds = min(
+                state.cooldown_remaining_seconds,
+                state.cooldown_total_seconds,
+            )
+            stats = self._effective_stats(world, player_id, ability, variant)
             previous_remaining = state.active_remaining_seconds
             state.active_remaining_seconds = max(0.0, state.active_remaining_seconds - dt)
             active_dt = min(previous_remaining, dt)
@@ -149,7 +168,7 @@ class ActiveAbilityRuntime:
         if state.active_remaining_seconds <= 0.0:
             return damage
 
-        stats = build_scaled_stats(ability, variant)
+        stats = self._effective_stats(world, player_id, ability, variant)
         reduction_ratio = max(0.0, min(1.0, float(stats.get("damage_reduction_ratio", 1.0))))
         reduced = int(round(float(damage) * (1.0 - reduction_ratio)))
         return max(0, reduced)
@@ -171,6 +190,18 @@ class ActiveAbilityRuntime:
             "active_remaining_seconds": float(state.active_remaining_seconds),
             "ready": state.cooldown_remaining_seconds <= 0.0,
         }
+
+    @staticmethod
+    def _effective_stats(world: World, player_id: str, ability, variant) -> dict[str, float]:
+        base_stats = build_scaled_stats(ability, variant)
+        modifier = world.enhancement_runtime.modifier_for_player(player_id)
+        return apply_ability_enhancement_modifiers(ability.ability_id, base_stats, modifier)
+
+    @staticmethod
+    def _effective_cooldown_seconds(world: World, player_id: str, ability, variant) -> float:
+        base_cooldown = cooldown_seconds(ability, variant)
+        modifier = world.enhancement_runtime.modifier_for_player(player_id)
+        return max(0.05, float(base_cooldown) * ability_cooldown_multiplier(modifier))
 
     @staticmethod
     def _update_guardian(

@@ -30,12 +30,12 @@ class CombatSystem:
         if direction.length_squared() == 0:
             return False
 
-        velocity = direction.normalized() * self.projectile_speed
+        velocity = direction.normalized() * world.player_projectile_speed(player.player_id)
         world.spawn_projectile(
             position=player.position.copy(),
             velocity=velocity,
             owner_player_id=player.player_id,
-            damage=self.projectile_damage,
+            damage=world.player_projectile_damage(player.player_id),
             ttl_seconds=self.projectile_ttl_seconds,
             radius=self.projectile_radius,
         )
@@ -102,7 +102,24 @@ class CombatSystem:
                 ):
                     continue
 
-                world.apply_player_damage(player, projectile.damage)
+                max_health_fraction_damage = int(
+                    round(
+                        float(player.max_health)
+                        * max(0.0, float(projectile.damage_fraction_of_target_max_health))
+                    )
+                )
+                total_damage = max(0, int(projectile.damage)) + max(0, max_health_fraction_damage)
+                damage_dealt = world.apply_player_damage(player, total_damage)
+                if (
+                    damage_dealt > 0
+                    and projectile.on_hit_slow_duration_seconds > 0.0
+                    and projectile.on_hit_move_speed_multiplier < 1.0
+                ):
+                    world.apply_player_move_speed_multiplier(
+                        player,
+                        multiplier=projectile.on_hit_move_speed_multiplier,
+                        duration_seconds=projectile.on_hit_slow_duration_seconds,
+                    )
                 projectile.alive = False
                 break
 

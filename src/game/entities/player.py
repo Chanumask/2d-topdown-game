@@ -8,10 +8,12 @@ class Player(Entity):
     player_id: str = ""
     character_id: str = ""
     velocity: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
+    base_max_health: int = 100
     base_speed: float = 100.0
     speed: float = 100.0
     max_health: int = 100
     health: int = 100
+    base_coin_pickup_radius: float = 14.0
     coin_pickup_radius: float = 14.0
     aim_position: Vec2 = field(default_factory=lambda: Vec2(0.0, 0.0))
     coins: int = 0
@@ -21,6 +23,8 @@ class Player(Entity):
     last_attack_tick: int = -1
     damage_iframe_seconds: float = 0.4
     damage_iframe_remaining: float = 0.0
+    move_speed_multiplier_override: float = 1.0
+    move_speed_multiplier_override_remaining_seconds: float = 0.0
     coin_heal_on_pickup: int = 0
     golden_momentum_stacks: int = 0
     golden_momentum_remaining_seconds: float = 0.0
@@ -37,6 +41,12 @@ class Player(Entity):
 
         self.throw_cooldown_remaining = max(0.0, self.throw_cooldown_remaining - dt)
         self.damage_iframe_remaining = max(0.0, self.damage_iframe_remaining - dt)
+        self.move_speed_multiplier_override_remaining_seconds = max(
+            0.0,
+            self.move_speed_multiplier_override_remaining_seconds - dt,
+        )
+        if self.move_speed_multiplier_override_remaining_seconds <= 0.0:
+            self.move_speed_multiplier_override = 1.0
         self.golden_momentum_remaining_seconds = max(
             0.0,
             self.golden_momentum_remaining_seconds - dt,
@@ -76,10 +86,12 @@ class Player(Entity):
                 "player_id": self.player_id,
                 "character_id": self.character_id,
                 "velocity": self.velocity.to_dict(),
+                "base_max_health": int(self.base_max_health),
                 "base_speed": float(self.base_speed),
                 "speed": float(self.speed),
                 "max_health": self.max_health,
                 "health": self.health,
+                "base_coin_pickup_radius": float(self.base_coin_pickup_radius),
                 "coin_pickup_radius": float(self.coin_pickup_radius),
                 "aim_position": self.aim_position.to_dict(),
                 "coins": self.coins,
@@ -89,11 +101,13 @@ class Player(Entity):
                 "last_attack_tick": int(self.last_attack_tick),
                 "damage_iframe_seconds": float(self.damage_iframe_seconds),
                 "damage_iframe_remaining": float(self.damage_iframe_remaining),
+                "move_speed_multiplier_override": float(self.move_speed_multiplier_override),
+                "move_speed_multiplier_override_remaining_seconds": float(
+                    self.move_speed_multiplier_override_remaining_seconds
+                ),
                 "coin_heal_on_pickup": int(self.coin_heal_on_pickup),
                 "golden_momentum_stacks": int(self.golden_momentum_stacks),
-                "golden_momentum_remaining_seconds": float(
-                    self.golden_momentum_remaining_seconds
-                ),
+                "golden_momentum_remaining_seconds": float(self.golden_momentum_remaining_seconds),
                 "fury_stacks": int(self.fury_stacks),
                 "fury_remaining_seconds": float(self.fury_remaining_seconds),
                 "chilling_field_stacks": int(self.chilling_field_stacks),
@@ -113,10 +127,17 @@ class Player(Entity):
             radius=float(payload.get("radius", 0.0)),
             alive=bool(payload.get("alive", True)),
             velocity=vec2_from_payload(payload, "velocity"),
+            base_max_health=int(payload.get("base_max_health", payload.get("max_health", 100))),
             base_speed=float(payload.get("base_speed", payload.get("speed", 100.0))),
             speed=float(payload.get("speed", 100.0)),
             max_health=int(payload.get("max_health", 100)),
             health=int(payload.get("health", 100)),
+            base_coin_pickup_radius=float(
+                payload.get(
+                    "base_coin_pickup_radius",
+                    payload.get("coin_pickup_radius", payload.get("radius", 0.0)),
+                )
+            ),
             coin_pickup_radius=float(payload.get("coin_pickup_radius", payload.get("radius", 0.0))),
             aim_position=vec2_from_payload(payload, "aim_position"),
             coins=int(payload.get("coins", 0)),
@@ -141,6 +162,12 @@ class Player(Entity):
             last_attack_tick=int(payload.get("last_attack_tick", -1)),
             damage_iframe_seconds=float(payload.get("damage_iframe_seconds", 0.4)),
             damage_iframe_remaining=float(payload.get("damage_iframe_remaining", 0.0)),
+            move_speed_multiplier_override=float(
+                payload.get("move_speed_multiplier_override", 1.0)
+            ),
+            move_speed_multiplier_override_remaining_seconds=float(
+                payload.get("move_speed_multiplier_override_remaining_seconds", 0.0)
+            ),
             coin_heal_on_pickup=int(payload.get("coin_heal_on_pickup", 0)),
             golden_momentum_stacks=int(payload.get("golden_momentum_stacks", 0)),
             golden_momentum_remaining_seconds=float(

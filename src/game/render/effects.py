@@ -13,6 +13,8 @@ from game.core.blessings import (
     BLESSING_VFX_SACRED_RENEWAL,
 )
 from game.core.enemies import (
+    ENEMY_VFX_AEGIS_BURST_PROJECTILE_PURPLE,
+    ENEMY_VFX_BOSS_SPAWN_DIRECTION,
     ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
     ENEMY_VFX_ELITE_SPAWN_DIRECTION,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
@@ -35,6 +37,7 @@ class EffectSheetDefinition:
     sheet_key: str
     image_path: str
     frame_size: int = DEFAULT_EFFECT_FRAME_SIZE
+    tint_color: tuple[int, int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +105,11 @@ EFFECT_SHEET_CATALOG: dict[str, EffectSheetDefinition] = {
         sheet_key="direction_sheet",
         image_path="assets/effects/direction.png",
     ),
+    "direction_sheet_red": EffectSheetDefinition(
+        sheet_key="direction_sheet_red",
+        image_path="assets/effects/direction.png",
+        tint_color=(255, 84, 84),
+    ),
 }
 
 # Frame coordinates use a 16x16 grid, with (0, 0) at the top-left tile.
@@ -154,9 +162,25 @@ EFFECT_CATALOG: dict[str, EffectDefinition] = {
         scale_multiple=3,
         loop=True,
     ),
+    ENEMY_VFX_AEGIS_BURST_PROJECTILE_PURPLE: EffectDefinition(
+        effect_id=ENEMY_VFX_AEGIS_BURST_PROJECTILE_PURPLE,
+        sheet_key="purple_sheet",
+        frame_sequence=((19, 7), (20, 7), (21, 7), (22, 7)),
+        fps=14.0,
+        scale_multiple=4,
+        loop=True,
+    ),
     ENEMY_VFX_ELITE_SPAWN_DIRECTION: EffectDefinition(
         effect_id=ENEMY_VFX_ELITE_SPAWN_DIRECTION,
         sheet_key="direction_sheet",
+        frame_sequence=((0, 0),),
+        fps=1.0,
+        scale_multiple=3,
+        loop=False,
+    ),
+    ENEMY_VFX_BOSS_SPAWN_DIRECTION: EffectDefinition(
+        effect_id=ENEMY_VFX_BOSS_SPAWN_DIRECTION,
+        sheet_key="direction_sheet_red",
         frame_sequence=((0, 0),),
         fps=1.0,
         scale_multiple=3,
@@ -293,6 +317,8 @@ class EffectClipLibrary:
         image = load_image(PROJECT_ROOT / definition.image_path)
         if image is None:
             return None
+        if definition.tint_color is not None:
+            image = self._tint_image(image, definition.tint_color)
 
         frame_size = max(1, int(definition.frame_size))
         sheet_width, sheet_height = image.get_size()
@@ -317,6 +343,15 @@ class EffectClipLibrary:
             rows=rows,
             frames=frames,
         )
+
+    @staticmethod
+    def _tint_image(
+        image: pygame.Surface,
+        tint_color: tuple[int, int, int],
+    ) -> pygame.Surface:
+        tinted = image.copy()
+        tinted.fill((*tint_color, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        return tinted
 
     def _warn_once_unknown_effect(self, effect_id: str) -> None:
         if effect_id in self._warned_effect_ids:

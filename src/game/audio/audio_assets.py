@@ -27,6 +27,7 @@ SFX_WORLD_COIN_PICKUP = "sfx_world_coin_pickup"
 SFX_ENEMY_HIT = "sfx_enemy_hit"
 SFX_ENEMY_DEATH = "sfx_enemy_death"
 SFX_ENEMY_ELITE_SPAWN = "sfx_enemy_elite_spawn"
+SFX_ENEMY_BOSS_SPAWN = "sfx_enemy_boss_spawn"
 
 MUSIC_ASSETS: dict[str, AudioAsset] = {
     MUSIC_MENU: AudioAsset(
@@ -89,6 +90,12 @@ SFX_ASSETS: dict[str, AudioAsset] = {
     SFX_ENEMY_ELITE_SPAWN: AudioAsset(
         key=SFX_ENEMY_ELITE_SPAWN,
         path=_asset("assets/audio/sfx/enemies/elite_spawn.wav"),
+        category="enemies",
+        base_volume=1.0,
+    ),
+    SFX_ENEMY_BOSS_SPAWN: AudioAsset(
+        key=SFX_ENEMY_BOSS_SPAWN,
+        path=_asset("assets/audio/sfx/enemies/boss_spawn.wav"),
         category="enemies",
         base_volume=1.0,
     ),

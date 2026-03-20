@@ -9,6 +9,7 @@ from game.core.blessings import (
     BLESSING_SACRED_RENEWAL,
     BlessingCategory,
     BlessingDefinition,
+    apply_run_boon_modifier,
     get_blessing,
 )
 from game.core.enemies import EnemyTier
@@ -97,10 +98,8 @@ class BlessingSystem:
         collector = world.players.get(collector_player_id)
         if collector is None:
             return
-        modifier = definition.run_boon_modifier
-        collector.coin_heal_on_pickup += int(modifier.coin_heal_on_pickup)
-        collector.golden_momentum_stacks += int(modifier.golden_momentum_stacks)
-        collector.fury_stacks += int(modifier.fury_stacks)
-        collector.chilling_field_stacks += int(modifier.chilling_field_stacks)
-        collector.chain_spark_stacks += int(modifier.chain_spark_stacks)
-        collector.impact_pulse_stacks += int(modifier.impact_pulse_stacks)
+        apply_run_boon_modifier(
+            collector,
+            blessing_id=definition.blessing_id,
+            modifier=definition.run_boon_modifier,
+        )

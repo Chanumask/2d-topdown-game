@@ -1,7 +1,8 @@
-from game.audio.audio_assets import SFX_ENEMY_ELITE_SPAWN
+from game.audio.audio_assets import SFX_ENEMY_BOSS_SPAWN, SFX_ENEMY_ELITE_SPAWN
 from game.core.enemies import (
     ENEMY_ABILITY_DELAYED_EXPLOSION_ON_TOUCH,
     ENEMY_ABILITY_RANGED_SHOT,
+    ENEMY_VFX_AEGIS_BURST_PROJECTILE_PURPLE,
     ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
     ENEMY_VFX_FLOATING_EYE_PURPLE,
     ENEMY_VFX_WARPED_SKULL_PROJECTILE_PURPLE,
@@ -14,7 +15,7 @@ from game.core.enemies import (
 )
 
 ELITE_MIN_DIFFICULTY_FACTOR = 2.0
-BOSS_MIN_DIFFICULTY_FACTOR = 10.0
+BOSS_MIN_DIFFICULTY_FACTOR = 2.0
 
 CRIMSON_IMP = EnemyProfile(
     profile_id="crimson_imp",
@@ -90,6 +91,26 @@ POINTED_DEMONSPAWN_BURST_SHOT = EnemyAbilityDefinition(
     projectile_radius=WARPED_SKULL_RANGED_SHOT.projectile_radius,
     projectile_effect_id=ENEMY_VFX_ELITE_BURST_PROJECTILE_PURPLE,
     projectile_burst_angles_degrees=(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0),
+)
+
+AEGIS_BOSS_FROST_BARRAGE = EnemyAbilityDefinition(
+    ability_id=ENEMY_ABILITY_RANGED_SHOT,
+    display_name="Frost Barrage",
+    description=(
+        "Fires a burst in all eight directions, dealing 20% of max health and slowing "
+        "players by 50% for 2 seconds."
+    ),
+    attack_interval_seconds=3.0,
+    attack_range=500.0,
+    projectile_speed=WARPED_SKULL_RANGED_SHOT.projectile_speed,
+    projectile_damage=0,
+    projectile_damage_fraction_of_max_health=0.20,
+    projectile_ttl_seconds=WARPED_SKULL_RANGED_SHOT.projectile_ttl_seconds,
+    projectile_radius=6.0,
+    projectile_slow_multiplier=0.50,
+    projectile_slow_duration_seconds=2.0,
+    projectile_effect_id=ENEMY_VFX_AEGIS_BURST_PROJECTILE_PURPLE,
+    projectile_burst_angles_degrees=POINTED_DEMONSPAWN_BURST_SHOT.projectile_burst_angles_degrees,
 )
 
 NEFARIOUS_SCAMP_SPEED_AURA = EnemyInfluenceDefinition(
@@ -194,19 +215,20 @@ AEGIS_BOSS = EnemyProfile(
         coin_drop_value=100,
         radius=52.0,
     ),
-    abilities=(),
+    abilities=(AEGIS_BOSS_FROST_BARRAGE,),
     passive_influences=(),
     hooks=(),
     tags=("ground", "boss", "melee"),
     spawn_weight=1.0,
     min_difficulty_factor=BOSS_MIN_DIFFICULTY_FACTOR,
     sprite_asset_name="AegisBoss.png",
-    sprite_frame_count=14,
-    sprite_frame_width=240,
-    sprite_frame_height=240,
+    sprite_frame_count=15,
+    sprite_frame_width=224,
+    sprite_frame_height=224,
     sprite_fps=10.0,
     sprite_pixel_scale=1,
     sprite_render_scale=0.8,
+    spawn_sfx_key=SFX_ENEMY_BOSS_SPAWN,
 )
 
 CRIMSON_IMP_PROFILE_ID = CRIMSON_IMP.profile_id

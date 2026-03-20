@@ -9,6 +9,7 @@ class AppScreen(StrEnum):
     SETTINGS = "settings"
     LOGBOOK = "logbook"
     IN_RUN = "in_run"
+    ENHANCEMENT_CHOICE = "enhancement_choice"
     PAUSE_COUNTDOWN = "pause_countdown"
     PAUSED = "paused"
     RESUME_COUNTDOWN = "resume_countdown"

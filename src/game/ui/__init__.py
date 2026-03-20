@@ -1,3 +1,4 @@
+from game.ui.enhancement_menu import EnhancementChoiceScreen
 from game.ui.game_over_menu import GameOverScreen
 from game.ui.lobby_menu import LobbyScreen
 from game.ui.logbook_menu import LogbookScreen
@@ -8,6 +9,7 @@ from game.ui.shop_menu import ShopScreen
 
 __all__ = [
     "GameOverScreen",
+    "EnhancementChoiceScreen",
     "LobbyScreen",
     "LogbookScreen",
     "MainMenuScreen",

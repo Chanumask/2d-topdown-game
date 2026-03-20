@@ -1,27 +1,27 @@
 {
   "profile": {
-    "last_run_coins": 88,
-    "last_run_enemies_killed": 144,
+    "last_run_coins": 138,
+    "last_run_enemies_killed": 40,
     "last_run_result": {
       "coins_by_player": {
-        "player-1": 88
+        "player-1": 138
       },
       "enemies_killed_by_player": {
-        "player-1": 112
+        "player-1": 32
       },
-      "enemies_killed_total": 144,
+      "enemies_killed_total": 40,
       "players": [
         "player-1"
       ],
-      "simulation_time": 350.6333333333431,
-      "survival_time_seconds": 350.6333333333431,
-      "tick": 24455,
-      "total_run_coins": 88
+      "simulation_time": 142.33333333333874,
+      "survival_time_seconds": 142.33333333333874,
+      "tick": 8540,
+      "total_run_coins": 138
     },
-    "last_run_survival_time_seconds": 350.6333333333431,
-    "lifetime_enemies_killed": 5521,
-    "lifetime_meta_earned": 7531,
-    "lifetime_runs_completed": 37,
+    "last_run_survival_time_seconds": 142.33333333333874,
+    "lifetime_enemies_killed": 8640,
+    "lifetime_meta_earned": 13702,
+    "lifetime_runs_completed": 39,
     "logbook": {
       "encountered_blessing_ids": [
         "chain_spark",
@@ -32,6 +32,7 @@
         "fury_stacks",
         "golden_momentum",
         "healing_coin",
+        "impact_pulse",
         "sacred_renewal"
       ],
       "encountered_enemy_ids": [
@@ -44,22 +45,22 @@
         "warped_skull"
       ]
     },
-    "meta_currency": 89,
+    "meta_currency": 289,
     "profile_id": "local-profile",
     "settings": {
       "activate_ability_key": "space",
       "fullscreen": true,
       "master_volume": 40,
       "mouse_sensitivity": 1.0,
-      "music_volume": 25,
+      "music_volume": 35,
       "sfx_volume": 35
     },
     "upgrades": {
       "fast_hands": 6,
-      "health_boost": 3,
-      "heavy_rocks": 6,
+      "health_boost": 8,
+      "heavy_rocks": 7,
       "magnet": 4,
-      "quick_boots": 6
+      "quick_boots": 7
     }
   },
   "schema_version": 1
